@@ -6,6 +6,7 @@ const name = z.string().trim().min(2).max(120);
 export const financialSchemas = {
   cards: z.object({
     name: name,
+    credit_limit: money.optional().default(0),
   }),
   accounts: z.object({
     name,

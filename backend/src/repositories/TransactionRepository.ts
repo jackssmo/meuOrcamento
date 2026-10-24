@@ -19,14 +19,15 @@ export class TransactionRepository {
       transaction.recurrence_end_date ?? null, transaction.account_id ?? null,
       transaction.installment_group_id ?? null,
       transaction.card ?? null,
+      transaction.is_paid ? 1 : 0,
     ];
   }
   
   async create(transaction: Transaction): Promise<Transaction> {
     const query = `
       INSERT INTO transactions
-        (user_id, description, amount, type, category, date, is_fixed, installments, installment_number, recurrence_end_date, account_id, installment_group_id, card)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (user_id, description, amount, type, category, date, is_fixed, installments, installment_number, recurrence_end_date, account_id, installment_group_id, card, is_paid)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     const values = this.toValues(transaction);
@@ -45,8 +46,8 @@ export class TransactionRepository {
       await connection.beginTransaction();
       const query = `
         INSERT INTO transactions
-          (user_id, description, amount, type, category, date, is_fixed, installments, installment_number, recurrence_end_date, account_id, installment_group_id, card)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (user_id, description, amount, type, category, date, is_fixed, installments, installment_number, recurrence_end_date, account_id, installment_group_id, card, is_paid)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       const created: Transaction[] = [];
       for (const transaction of transactions) {
@@ -95,7 +96,11 @@ export class TransactionRepository {
     const [countRows] = await db.execute<RowDataPacket[]>(
       `SELECT COUNT(*) AS total FROM transactions WHERE ${where}`, values,
     );
-    return { rows: rows as Transaction[], total: Number(countRows[0]?.total ?? 0) };
+    const transactions = rows.map((r) => ({
+      ...r,
+      is_paid: Boolean(r.is_paid),
+    })) as Transaction[];
+    return { rows: transactions, total: Number(countRows[0]?.total ?? 0) };
   }
 
   async findById(id: number): Promise<Transaction | null> {
@@ -103,13 +108,16 @@ export class TransactionRepository {
     const [rows] = await db.execute<RowDataPacket[]>(query, [id]);
     
     if (rows.length === 0) return null;
-    return rows[0] as Transaction;
+    return {
+      ...rows[0],
+      is_paid: Boolean(rows[0].is_paid),
+    } as Transaction;
   }
 
   async update(id: number, transaction: Transaction): Promise<void> {
     const query = `
       UPDATE transactions 
-      SET description = ?, amount = ?, type = ?, category = ?, date = ?, card = ?
+      SET description = ?, amount = ?, type = ?, category = ?, date = ?, card = ?, is_paid = ?
       WHERE id = ? AND user_id = ?
     `;
     const values = [
@@ -119,11 +127,20 @@ export class TransactionRepository {
       transaction.category,
       transaction.date,
       transaction.card ?? null,
+      transaction.is_paid ? 1 : 0,
       id,
       transaction.user_id
     ];
 
     await db.execute(query, values);
+  }
+
+  async updatePaymentStatus(id: number, userId: number, isPaid: boolean): Promise<boolean> {
+    const [result] = await db.execute<ResultSetHeader>(
+      'UPDATE transactions SET is_paid = ? WHERE id = ? AND user_id = ?',
+      [isPaid ? 1 : 0, id, userId],
+    );
+    return result.affectedRows > 0;
   }
 
   async updateInstallmentSeries(

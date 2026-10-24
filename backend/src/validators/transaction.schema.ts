@@ -10,6 +10,7 @@ export const transactionSchema = z.object({
   installments: z.number().int().min(1).max(60).optional().default(1),
   account_id: z.number().int().positive().nullable().optional(),
   card: z.string().trim().min(2).max(120).nullable().optional(),
+  is_paid: z.boolean().optional().default(false),
 });
 
 export type TransactionInput = z.infer<typeof transactionSchema>;

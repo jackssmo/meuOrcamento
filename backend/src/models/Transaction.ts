@@ -13,5 +13,8 @@ export interface Transaction {
   recurrence_end_date?: string | Date | null;
   account_id?: number | null | undefined;
   card?: string | null;
+  is_paid?: boolean;
   created_at?: Date;
+}
+
 }
