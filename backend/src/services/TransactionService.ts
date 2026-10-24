@@ -10,7 +10,7 @@ export class TransactionService {
     async createTransaction(userId: number, data: Omit<Transaction, 'id' | 'user_id' | 'created_at'>): Promise<Transaction> {
         const parsed = transactionSchema.safeParse(data);
         if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Dados da transação inválidos.');
-        const { description, amount, type, category, date, installments, is_fixed, account_id, card } = parsed.data;
+        const { description, amount, type, category, date, installments, is_fixed, account_id, card, is_paid } = parsed.data;
         if (card && !(await this.transactionRepository.cardBelongsToUser(userId, card))) {
             throw new Error('O cartão selecionado não pertence à sua conta.');
         }
@@ -48,6 +48,7 @@ export class TransactionService {
                 installment_group_id: installmentGroupId,
                 account_id,
                 card: type === 'expense' ? card ?? null : null,
+                is_paid: Boolean(is_paid),
             });
         }
         const created = await this.transactionRepository.createMany(newTransactions);
@@ -82,6 +83,7 @@ export class TransactionService {
             user_id: userId,
             ...parsed.data,
             card: parsed.data.card ?? null,
+            is_paid: Boolean(parsed.data.is_paid),
             date: parsed.data.date.toISOString().substring(0, 10),
         };
 
@@ -100,6 +102,22 @@ export class TransactionService {
         }
 
         return updatedTransaction;
+    }
+
+    async togglePaymentStatus(id: number, userId: number, isPaid?: boolean): Promise<{ id: number; is_paid: boolean }> {
+        const existingTransaction = await this.transactionRepository.findById(id);
+
+        if (!existingTransaction) {
+            throw new Error('Transação não encontrada.');
+        }
+
+        if (existingTransaction.user_id !== userId) {
+            throw new Error('Acesso negado. Você não tem permissão para alterar esta transação.');
+        }
+
+        const newStatus = typeof isPaid === 'boolean' ? isPaid : !existingTransaction.is_paid;
+        await this.transactionRepository.updatePaymentStatus(id, userId, newStatus);
+        return { id, is_paid: newStatus };
     }
 
     async deleteTransaction(
@@ -140,9 +158,10 @@ export class TransactionService {
                 (existingTransaction.installments ?? 1) > 1,
         };
     }
+
     async getTransactionSummary(userId: number, month?: number, year?: number) {
-    return await this.transactionRepository.getSummary(userId, month, year);
-  }
+        return await this.transactionRepository.getSummary(userId, month, year);
+    }
 
     async getTransactionsByUserId(userId: number, options: Parameters<TransactionRepository['findByUserId']>[1]) {
         return await this.transactionRepository.findByUserId(userId, options);

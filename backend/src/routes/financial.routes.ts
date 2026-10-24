@@ -15,6 +15,9 @@ for (const resource of resources) {
   router.delete(`/${resource}/:id`, (req, res) => controller.remove(resource, req as AuthRequest, res));
 }
 
+// Rota especial: pagar a fatura de um cartão por mês/ano inteiro
+router.post('/cards/:id/pay', (req, res) => controller.payCardBill(req as AuthRequest, res));
+
 router.get('/reports/monthly', (req, res) => controller.report(req as AuthRequest, res));
 
 export default router;

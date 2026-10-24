@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent, type ChangeEvent } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../services/api";
 import { Header } from "../components/Header";
 import { SummaryCards } from "../components/SummaryCards";
 import { TransactionTable } from "../components/TransactionTable";
 import { TransactionModal } from "../components/TransactionModal";
-import type { Transaction } from "../types/Transaction";
+import type { Transaction, CardItem } from "../types/Transaction";
 import { formatCurrency } from "../utils/formatters";
 import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
@@ -86,6 +87,8 @@ export function Dashboard() {
   const [category, setCategory] = useState("");
   const [card, setCard] = useState("");
   const [cards, setCards] = useState<string[]>([]);
+  const [cardsList, setCardsList] = useState<CardItem[]>([]);
+  const [isPaid, setIsPaid] = useState(false);
   const [date, setDate] = useState(getTodayInputValue);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -122,10 +125,11 @@ export function Dashboard() {
   }, [selectedMonth, selectedYear, search, onlyType, page]);
 
   const refreshFinancialData = useCallback(async () => {
-    const [summaryResponse, historyResponse, categoryResponse] = await Promise.all([
+    const [summaryResponse, historyResponse, categoryResponse, cardsResponse] = await Promise.all([
       api.get("/transactions/summary", { params: { month: selectedMonth, year: selectedYear } }),
       api.get("/financial/reports/monthly", { params: { year: selectedYear } }),
       api.get("/financial/reports/monthly", { params: { month: selectedMonth, year: selectedYear } }),
+      api.get("/financial/cards"),
     ]);
 
     setSummary(summaryResponse.data);
@@ -147,11 +151,11 @@ export function Dashboard() {
         {},
       ),
     );
+    setCardsList(cardsResponse.data || []);
+    setCards((cardsResponse.data || []).map((item: CardItem) => item.name));
   }, [selectedMonth, selectedYear]);
 
-  const cardEntries = Object.entries(cardTotals);
-  const cardTotal = cardEntries.reduce((total, [, value]) => total + value, 0);
-  const maxCardTotal = Math.max(...cardEntries.map(([, value]) => value), 1);
+  const cardTotal = Object.values(cardTotals).reduce((total, value) => total + value, 0);
 
   useEffect(() => {
     void Promise.resolve().then(fetchTransactions);
@@ -160,13 +164,12 @@ export function Dashboard() {
       setMonthlyHistory([]);
       setCategoryTotals({});
       setCardTotals({});
+      setCardsList([]);
+      setCards([]);
     });
     api.get("/financial/categories")
       .then((response) => setCustomCategories(response.data.map((item: { name: string }) => item.name)))
       .catch(() => setCustomCategories([]));
-    api.get("/financial/cards")
-      .then((response) => setCards(response.data.map((item: { name: string }) => item.name)))
-      .catch(() => setCards([]));
   }, [fetchTransactions, refreshFinancialData]);
 
   function closeModal() {
@@ -178,6 +181,7 @@ export function Dashboard() {
     setDate(getTodayInputValue());
     setIsFixed(false);
     setInstallments("1");
+    setIsPaid(false);
     setEditingId(null);
     setEditingTransaction(null);
     setShowEditScope(false);
@@ -195,6 +199,7 @@ export function Dashboard() {
     setCategory(transaction.category);
     setCard(transaction.card || "");
     setDate(String(transaction.date).substring(0, 10));
+    setIsPaid(Boolean(transaction.is_paid));
     setEditingId(transaction.id || null);
     setEditingTransaction(transaction);
     setIsModalOpen(true);
@@ -233,13 +238,13 @@ export function Dashboard() {
   async function submitTransaction(numericAmount: number, updateSeries: boolean) {
     setIsSubmitting(true);
     try {
-      
       const data = {
         description,
         amount: numericAmount,
         type,
         category,
         card: type === "expense" && card ? card : null,
+        is_paid: type === "expense" ? isPaid : false,
         date,
         is_fixed: isFixed,
         installments: Number(installments),
@@ -247,7 +252,15 @@ export function Dashboard() {
 
       if (editingId) {
         const scope = updateSeries ? "?scope=series" : "";
-        await api.put(`/transactions/${editingId}${scope}`, { description, amount: numericAmount, type, category, date, card: type === "expense" && card ? card : null });
+        await api.put(`/transactions/${editingId}${scope}`, {
+          description,
+          amount: numericAmount,
+          type,
+          category,
+          date,
+          card: type === "expense" && card ? card : null,
+          is_paid: type === "expense" ? isPaid : false,
+        });
         toast.success("Transação atualizada com sucesso!");
       } else {
         await api.post("/transactions", data);
@@ -265,6 +278,24 @@ export function Dashboard() {
       toast.error(message || "Erro ao salvar transação.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handlePayCardBill(cardId: number, cardName: string) {
+    const monthLabel = monthLabels[selectedMonth - 1];
+    if (!window.confirm(`Confirma o pagamento da fatura de "${cardName}" referente a ${monthLabel} de ${selectedYear}?\n\nTodas as despesas pendentes deste cartão neste mês serão marcadas como pagas e o limite será liberado.`)) return;
+    try {
+      const response = await api.post(`/financial/cards/${cardId}/pay`, {
+        month: selectedMonth,
+        year: selectedYear,
+      });
+      const data = response.data as { message: string; updated: number; totalAmount: number };
+      toast.success(data.message);
+      await Promise.all([fetchTransactions(), refreshFinancialData()]);
+    } catch (error) {
+      console.error(error);
+      const message = isAxiosError(error) ? error.response?.data?.error : undefined;
+      toast.error(message || "Erro ao pagar fatura.");
     }
   }
 
@@ -407,93 +438,193 @@ export function Dashboard() {
           </div>
 
           <div className="space-y-8">
-          <section className="surface p-6 h-fit">
-            <div className="section-title">
-              <h2>Gastos por categoria</h2>
-              <span>{formatCurrency(categoryTotal)}</span>
-            </div>
-            {expense === 0 ? (
-              <p className="text-sm text-center text-gray-500">Sem despesas neste mês</p>
-            ) : (
-              <div>
-                <div className="flex justify-center py-2">
-                  <div
-                    className="relative grid h-40 w-40 place-items-center rounded-full"
-                    style={{ background: `conic-gradient(${categoryGradient})` }}
-                    aria-label="Distribuição das despesas por categoria"
-                  >
-                    <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Despesas</span>
-                      <strong className="text-sm text-slate-700">{formatCurrency(categoryTotal)}</strong>
+            {/* Gastos por categoria */}
+            <section className="surface p-6 h-fit">
+              <div className="section-title">
+                <h2>Gastos por categoria</h2>
+                <span>{formatCurrency(categoryTotal)}</span>
+              </div>
+              {expense === 0 ? (
+                <p className="text-sm text-center text-gray-500">Sem despesas neste mês</p>
+              ) : (
+                <div>
+                  <div className="flex justify-center py-2">
+                    <div
+                      className="relative grid h-40 w-40 place-items-center rounded-full"
+                      style={{ background: `conic-gradient(${categoryGradient})` }}
+                      aria-label="Distribuição das despesas por categoria"
+                    >
+                      <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Despesas</span>
+                        <strong className="text-sm text-slate-700">{formatCurrency(categoryTotal)}</strong>
+                      </div>
                     </div>
                   </div>
+                  <div className="mt-5 space-y-3">
+                    {categoryEntries.map(([cat, val]) => {
+                      const percentage = Math.round((val / categoryTotal) * 100);
+                      return (
+                        <div key={cat}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="flex items-center gap-2 font-medium text-gray-700">
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getCategoryColor(cat) }} />
+                              {categoryLabels[cat] || cat}
+                            </span>
+                            <span className="text-gray-500">{formatCurrency(val)} <span className="text-xs">({percentage}%)</span></span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-2.5">
+                            <div
+                              className="h-2.5 rounded-full"
+                              style={{ width: `${percentage}%`, backgroundColor: getCategoryColor(cat) }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="mt-5 space-y-3">
-                {categoryEntries.map(([cat, val]) => {
-                    const percentage = Math.round((val / categoryTotal) * 100);
+              )}
+            </section>
+
+            {/* Cartões de crédito e limites */}
+            <section className="surface p-6 h-fit">
+              <div className="section-title">
+                <h2>Cartões e Limites</h2>
+                <div className="flex items-center gap-3">
+                  {cardTotal > 0 && (
+                    <span className="text-xs font-medium text-slate-500">
+                      Mês: {formatCurrency(cardTotal)}
+                    </span>
+                  )}
+                  <Link
+                    to="/profile"
+                    className="text-xs font-semibold text-[#2454a6] hover:underline"
+                  >
+                    Gerenciar
+                  </Link>
+                </div>
+              </div>
+
+              {cardsList.length === 0 ? (
+                <div className="text-center py-4 text-sm text-gray-500">
+                  <p>Nenhum cartão cadastrado.</p>
+                  <Link
+                    to="/profile"
+                    className="mt-2 inline-block font-semibold text-[#2454a6] hover:underline"
+                  >
+                    Cadastrar cartão no Perfil
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cardsList.map((c) => {
+                    const limit = Number(c.credit_limit) || 0;
+                    const used = Number(c.used_limit) || 0;
+                    const available = Number(c.available_limit) || (limit - used);
+                    const usagePercentage = limit > 0 ? Math.round((used / limit) * 100) : 0;
+                    const isOverLimit = limit > 0 && used > limit;
+                    const monthSpent = cardTotals[c.name] || 0;
+                    // fatura quitada quando não há despesas pendentes no mês
+                    const billAlreadyPaid = monthSpent > 0 && used === 0;
+
                     return (
-                      <div key={cat}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="flex items-center gap-2 font-medium text-gray-700">
-                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getCategoryColor(cat) }} />
-                            {categoryLabels[cat] || cat}
+                      <div
+                        key={c.id}
+                        className="rounded-lg border border-slate-200 bg-white p-3 shadow-xs space-y-2"
+                      >
+                        {/* Cabeçalho: nome + gasto do mês */}
+                        <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full"
+                              style={{ backgroundColor: getCardColor(c.name) }}
+                            />
+                            {c.name}
                           </span>
-                          <span className="text-gray-500">{formatCurrency(val)} <span className="text-xs">({percentage}%)</span></span>
+                          {monthSpent > 0 && (
+                            <span className="text-xs font-normal text-slate-500">
+                              Fatura: {formatCurrency(monthSpent)}
+                            </span>
+                          )}
                         </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2.5">
-                          <div
-                            className="h-2.5 rounded-full"
-                            style={{ width: `${percentage}%`, backgroundColor: getCategoryColor(cat) }}
-                          ></div>
-                        </div>
+
+                        {/* Indicadores de limite (se configurado) */}
+                        {limit > 0 ? (
+                          <>
+                            <div className="grid grid-cols-3 gap-1 text-[11px] text-slate-600 bg-slate-50 p-2 rounded">
+                              <div>
+                                <span className="block text-slate-400">Limite</span>
+                                <strong className="text-slate-700">{formatCurrency(limit)}</strong>
+                              </div>
+                              <div>
+                                <span className="block text-slate-400">Usado</span>
+                                <strong className={isOverLimit ? "text-red-600" : "text-amber-600"}>
+                                  {formatCurrency(used)}
+                                </strong>
+                              </div>
+                              <div>
+                                <span className="block text-slate-400">Disponível</span>
+                                <strong className={available < 0 ? "text-red-600" : "text-emerald-600"}>
+                                  {formatCurrency(available)}
+                                </strong>
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                                <span>{usagePercentage}% do limite utilizado</span>
+                                {isOverLimit && <span className="text-red-600 font-bold">Estourado!</span>}
+                              </div>
+                              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    isOverLimit
+                                      ? "bg-red-600"
+                                      : usagePercentage >= 80
+                                      ? "bg-amber-500"
+                                      : "bg-emerald-500"
+                                  }`}
+                                  style={{ width: `${Math.min(100, usagePercentage)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="bg-slate-50 p-2 rounded text-xs text-slate-500 flex justify-between items-center">
+                            <span>Limite não configurado</span>
+                            <Link to="/profile" className="text-[#2454a6] font-semibold hover:underline">
+                              Definir limite
+                            </Link>
+                          </div>
+                        )}
+
+                        {/* Botão Pagar Fatura */}
+                        {monthSpent > 0 && (
+                          billAlreadyPaid ? (
+                            <div className="flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                              <span>✓</span>
+                              Fatura de {monthLabels[selectedMonth - 1]} paga!
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void handlePayCardBill(c.id, c.name)}
+                              className="w-full rounded-lg border border-[#2454a6] bg-white px-3 py-2 text-xs font-semibold text-[#2454a6] transition hover:bg-[#2454a6] hover:text-white"
+                            >
+                              💳 Pagar fatura de {monthLabels[selectedMonth - 1]}
+                            </button>
+                          )
+                        )}
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            )}
-          </section>
 
-          <section className="surface p-6 h-fit">
-            <div className="section-title">
-              <h2>Despesas por cartão</h2>
-              <span>{formatCurrency(cardTotal)}</span>
-            </div>
-            {cardEntries.length === 0 ? (
-              <p className="text-center text-sm text-gray-500">Sem despesas neste mês</p>
-            ) : (
-              <div className="space-y-4">
-                {cardEntries.map(([cardName, value]) => {
-                  const percentage = cardTotal > 0 ? Math.round((value / cardTotal) * 100) : 0;
-                  return (
-                    <div key={cardName}>
-                      <div className="mb-1 flex justify-between gap-3 text-sm">
-                        <span className="flex min-w-0 items-center gap-2 font-medium text-gray-700">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: getCardColor(cardName) }}
-                          />
-                          <span className="truncate">{cardName}</span>
-                        </span>
-                        <span className="shrink-0 text-gray-500">
-                          {formatCurrency(value)} <span className="text-xs">({percentage}%)</span>
-                        </span>
-                      </div>
-                      <div className="h-2.5 w-full rounded-full bg-gray-100">
-                        <div
-                          className="h-2.5 rounded-full"
-                          style={{
-                            width: `${Math.max(3, (value / maxCardTotal) * 100)}%`,
-                            backgroundColor: getCardColor(cardName),
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                  <div className="border-t border-slate-200 pt-3 text-xs text-slate-500">
+                    💡 Clique em <span className="font-semibold text-[#2454a6]">Pagar fatura</span> para quitar todas as despesas pendentes do cartão no mês selecionado de uma vez, liberando o limite.
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
         </div>
       </main>
@@ -519,14 +650,14 @@ export function Dashboard() {
                       onClick={() => void confirmDelete("single")}
                       className="w-full rounded-lg border border-red-200 px-4 py-3 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
                     >
-                      Apagar somente esta parcela
+                      Excluir apenas esta parcela
                     </button>
                     <button
                       type="button"
                       onClick={() => void confirmDelete("series")}
                       className="w-full rounded-lg bg-red-600 px-4 py-3 text-left text-sm font-semibold text-white hover:bg-red-700"
                     >
-                      Apagar todas as parcelas
+                      Excluir todas as parcelas
                     </button>
                   </>
                 )}
@@ -538,30 +669,26 @@ export function Dashboard() {
                     onClick={() => void confirmDelete("single")}
                     className="w-full rounded-lg border border-red-200 px-4 py-3 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
                   >
-                    Apagar somente esta ocorrência
+                    Excluir apenas este mês
                   </button>
                   <button
                     type="button"
                     onClick={() => void confirmDelete("series")}
                     className="w-full rounded-lg bg-red-600 px-4 py-3 text-left text-sm font-semibold text-white hover:bg-red-700"
                   >
-                    Apagar esta e as próximas ocorrências
+                    Excluir deste mês em diante
                   </button>
                 </>
               )}
 
-              {!(
-                (transactionToDelete.type === "expense" &&
-                  !transactionToDelete.is_fixed &&
-                  (transactionToDelete.installments || 1) > 1) ||
-                (transactionToDelete.type === "income" && Boolean(transactionToDelete.is_fixed))
-              ) && (
+              {(!transactionToDelete.installments || transactionToDelete.installments <= 1) &&
+                !transactionToDelete.is_fixed && (
                   <button
                     type="button"
                     onClick={() => void confirmDelete("single")}
-                    className="w-full rounded-lg bg-red-600 px-4 py-3 text-left text-sm font-semibold text-white hover:bg-red-700"
+                    className="w-full rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-700"
                   >
-                    Apagar transação
+                    Confirmar exclusão
                   </button>
                 )}
 
@@ -577,24 +704,31 @@ export function Dashboard() {
         </div>
       )}
 
-      {showEditScope && editingTransaction && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+      {showEditScope && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="text-xl font-bold text-slate-800">Atualizar parcelas</h2>
+            <h2 className="text-xl font-bold text-slate-800">Atualizar parcelamento</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Esta despesa possui parcelas. Escolha como aplicar a alteração.
+              Esta é uma despesa parcelada. Como deseja aplicar a alteração?
             </p>
+
             <div className="mt-5 space-y-3">
               <button
                 type="button"
-                onClick={() => void submitTransaction(Number(amount.replace(/\./g, "").replace(",", ".")), false)}
-                className="w-full rounded-lg border border-blue-200 px-4 py-3 text-left text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                onClick={() => {
+                  const numericAmount = Number(amount.replace(/\./g, "").replace(",", "."));
+                  void submitTransaction(numericAmount, false);
+                }}
+                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Editar somente esta parcela
+                Atualizar apenas esta parcela
               </button>
               <button
                 type="button"
-                onClick={() => void submitTransaction(Number(amount.replace(/\./g, "").replace(",", ".")), true)}
+                onClick={() => {
+                  const numericAmount = Number(amount.replace(/\./g, "").replace(",", "."));
+                  void submitTransaction(numericAmount, true);
+                }}
                 className="w-full rounded-lg bg-[#2454a6] px-4 py-3 text-left text-sm font-semibold text-white hover:bg-[#1c4386]"
               >
                 Editar esta e as próximas parcelas
@@ -634,6 +768,8 @@ export function Dashboard() {
         setIsFixed={setIsFixed}
         installments={installments}
         setInstallments={setInstallments}
+        isPaid={isPaid}
+        setIsPaid={setIsPaid}
         categories={customCategories}
       />
     </div>

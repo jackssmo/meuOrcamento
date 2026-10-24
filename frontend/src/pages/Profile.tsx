@@ -4,6 +4,8 @@ import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import { api } from "../services/api";
 import { Header } from "../components/Header";
+import { formatCurrency, formatCurrencyInput } from "../utils/formatters";
+import type { CardItem } from "../types/Transaction";
 
 export function Profile() {
   const navigate = useNavigate();
@@ -13,10 +15,13 @@ export function Profile() {
   const [newPassword, setNewPassword] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [cards, setCards] = useState<{ id: number; name: string }[]>([]);
+
+  const [cards, setCards] = useState<CardItem[]>([]);
   const [newCard, setNewCard] = useState("");
+  const [newCardLimit, setNewCardLimit] = useState("");
   const [editingCardId, setEditingCardId] = useState<number | null>(null);
   const [editingCardName, setEditingCardName] = useState("");
+  const [editingCardLimit, setEditingCardLimit] = useState("");
 
   useEffect(() => {
     api.get("/auth/profile")
@@ -26,10 +31,15 @@ export function Profile() {
       })
       .catch(() => toast.error("Não foi possível carregar seus dados."))
       .finally(() => setIsLoading(false));
+
+    loadCards();
+  }, []);
+
+  function loadCards() {
     api.get("/financial/cards")
       .then((response) => setCards(response.data))
       .catch(() => toast.error("Não foi possível carregar seus cartões."));
-  }, []);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -52,17 +62,22 @@ export function Profile() {
     } finally {
       setIsSaving(false);
     }
-
   }
 
   async function addCard(event: FormEvent) {
     event.preventDefault();
     if (!newCard.trim()) return;
     try {
-      const response = await api.post("/financial/cards", { name: newCard.trim() });
+      const rawLimit = newCardLimit.replace(/\D/g, "");
+      const numericLimit = rawLimit ? Number(rawLimit) / 100 : 0;
+      const response = await api.post("/financial/cards", {
+        name: newCard.trim(),
+        credit_limit: numericLimit,
+      });
       setCards((current) => [response.data, ...current]);
       setNewCard("");
-      toast.success("Cartão cadastrado.");
+      setNewCardLimit("");
+      toast.success("Cartão cadastrado com sucesso!");
     } catch (error) {
       const message = isAxiosError(error) ? error.response?.data?.error : undefined;
       toast.error(message || "Não foi possível cadastrar o cartão.");
@@ -80,9 +95,10 @@ export function Profile() {
     }
   }
 
-  function startEditingCard(card: { id: number; name: string }) {
+  function startEditingCard(card: CardItem) {
     setEditingCardId(card.id);
     setEditingCardName(card.name);
+    setEditingCardLimit(card.credit_limit ? (card.credit_limit * 100).toFixed(0) : "");
   }
 
   async function saveCard(event: FormEvent, id: number) {
@@ -91,10 +107,16 @@ export function Profile() {
     if (normalizedName.length < 2) return;
 
     try {
-      const response = await api.patch(`/financial/cards/${id}`, { name: normalizedName });
+      const rawLimit = editingCardLimit.replace(/\D/g, "");
+      const numericLimit = rawLimit ? Number(rawLimit) / 100 : 0;
+      const response = await api.patch(`/financial/cards/${id}`, {
+        name: normalizedName,
+        credit_limit: numericLimit,
+      });
       setCards((current) => current.map((card) => card.id === id ? response.data : card));
       setEditingCardId(null);
       setEditingCardName("");
+      setEditingCardLimit("");
       toast.success("Cartão atualizado.");
     } catch (error) {
       const message = isAxiosError(error) ? error.response?.data?.error : undefined;
@@ -109,10 +131,11 @@ export function Profile() {
         <div className="page-heading">
           <div>
             <h1>Minha conta</h1>
-            <p>Atualize suas informações pessoais.</p>
+            <p>Atualize suas informações pessoais e limites de cartões.</p>
           </div>
         </div>
-        <section className="surface max-w-2xl p-6 sm:p-8">
+
+        <section className="surface max-w-3xl p-6 sm:p-8">
           {isLoading ? (
             <p className="text-sm text-[#77817e]">Carregando seus dados...</p>
           ) : (
@@ -148,49 +171,192 @@ export function Profile() {
             </form>
           )}
         </section>
-        <section className="surface mt-6 max-w-2xl p-6 sm:p-8">
-          <h2 className="text-lg font-semibold text-[#202b3c]">Meus cartões</h2>
-          <p className="mt-1 text-sm text-[#7b8798]">Cadastre os cartões que aparecem nas suas despesas.</p>
-          <form onSubmit={addCard} className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <input
-              required
-              minLength={2}
-              maxLength={120}
-              value={newCard}
-              onChange={(event) => setNewCard(event.target.value)}
-              placeholder="Ex.: Nubank Visa"
-              className="min-w-0 flex-1 rounded-lg border border-[#dfe3eb] px-4 py-3 outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
-            />
-            <button type="submit" className="rounded-lg bg-[#2454a6] px-5 py-3 text-sm font-semibold text-white hover:bg-[#1c4386]">Adicionar cartão</button>
+
+        <section className="surface mt-6 max-w-3xl p-6 sm:p-8">
+          <div>
+            <h2 className="text-lg font-semibold text-[#202b3c]">Meus cartões e limites</h2>
+            <p className="mt-1 text-sm text-[#7b8798]">
+              Cadastre seus cartões com o limite de crédito total. O sistema calcula automaticamente quanto limite já foi utilizado pelas despesas não pagas. Quando você marcar uma despesa como paga, o limite é liberado (abatido)!
+            </p>
+          </div>
+
+          <form onSubmit={addCard} className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-12">
+            <div className="sm:col-span-6">
+              <input
+                required
+                minLength={2}
+                maxLength={120}
+                value={newCard}
+                onChange={(event) => setNewCard(event.target.value)}
+                placeholder="Nome do cartão (ex.: Nubank Black)"
+                className="w-full rounded-lg border border-[#dfe3eb] px-4 py-3 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
+              />
+            </div>
+            <div className="sm:col-span-4">
+              <input
+                value={newCardLimit ? formatCurrencyInput(newCardLimit) : ""}
+                onChange={(event) => setNewCardLimit(event.target.value)}
+                placeholder="Limite total R$ (ex: 5.000,00)"
+                className="w-full rounded-lg border border-[#dfe3eb] px-4 py-3 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <button
+                type="submit"
+                className="w-full rounded-lg bg-[#2454a6] px-4 py-3 text-sm font-semibold text-white hover:bg-[#1c4386] transition"
+              >
+                Adicionar
+              </button>
+            </div>
           </form>
-          <div className="mt-5 space-y-2">
-            {cards.map((card) => (
-              <div key={card.id} className="flex items-center justify-between rounded-lg border border-[#e4e9f0] px-4 py-3">
-                {editingCardId === card.id ? (
-                  <form onSubmit={(event) => void saveCard(event, card.id)} className="flex w-full flex-col gap-2 sm:flex-row">
-                    <input
-                      required
-                      minLength={2}
-                      maxLength={120}
-                      value={editingCardName}
-                      onChange={(event) => setEditingCardName(event.target.value)}
-                      className="min-w-0 flex-1 rounded-lg border border-[#dfe3eb] px-3 py-2 outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
-                      autoFocus
-                    />
-                    <button type="submit" className="text-sm font-semibold text-[#2454a6] hover:text-[#1c4386]">Salvar</button>
-                    <button type="button" onClick={() => setEditingCardId(null)} className="text-sm font-semibold text-slate-500 hover:text-slate-700">Cancelar</button>
-                  </form>
-                ) : (
-                  <>
-                    <span className="font-medium text-[#243238]">{card.name}</span>
-                    <div className="flex gap-3">
-                      <button type="button" onClick={() => startEditingCard(card)} className="text-sm font-semibold text-[#2454a6] hover:text-[#1c4386]">Editar</button>
-                      <button type="button" onClick={() => void removeCard(card.id)} className="text-sm font-semibold text-red-600 hover:text-red-800">Excluir</button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
+
+          <div className="mt-6 space-y-3">
+            {cards.length === 0 ? (
+              <p className="py-4 text-center text-sm text-gray-500">Nenhum cartão cadastrado.</p>
+            ) : (
+              cards.map((card) => {
+                const limit = Number(card.credit_limit) || 0;
+                const used = Number(card.used_limit) || 0;
+                const available = Number(card.available_limit) || (limit - used);
+                const usagePercentage = limit > 0 ? Math.round((used / limit) * 100) : 0;
+                const isOverLimit = limit > 0 && used > limit;
+
+                return (
+                  <div
+                    key={card.id}
+                    className="rounded-xl border border-[#e4e9f0] bg-white p-4 shadow-sm hover:border-[#ccd7e6] transition"
+                  >
+                    {editingCardId === card.id ? (
+                      <form onSubmit={(event) => void saveCard(event, card.id)} className="space-y-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                              Nome do cartão
+                            </label>
+                            <input
+                              required
+                              minLength={2}
+                              maxLength={120}
+                              value={editingCardName}
+                              onChange={(event) => setEditingCardName(event.target.value)}
+                              className="w-full rounded-lg border border-[#dfe3eb] px-3 py-2 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
+                              autoFocus
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                              Limite de crédito (R$)
+                            </label>
+                            <input
+                              value={editingCardLimit ? formatCurrencyInput(editingCardLimit) : ""}
+                              onChange={(event) => setEditingCardLimit(event.target.value)}
+                              placeholder="0,00"
+                              className="w-full rounded-lg border border-[#dfe3eb] px-3 py-2 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingCardId(null)}
+                            className="rounded-lg border border-[#dfe3eb] px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            className="rounded-lg bg-[#2454a6] px-4 py-2 text-xs font-semibold text-white hover:bg-[#1c4386]"
+                          >
+                            Salvar
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">💳</span>
+                            <span className="font-semibold text-[#243238] text-base">{card.name}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditingCard(card)}
+                              className="text-xs font-semibold text-[#2454a6] hover:text-[#1c4386] px-2 py-1 rounded hover:bg-blue-50 transition"
+                            >
+                              Editar limite
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void removeCard(card.id)}
+                              className="text-xs font-semibold text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-red-50 transition"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Indicadores de Limite */}
+                        <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center sm:text-left">
+                          <div>
+                            <span className="block text-[11px] font-medium text-slate-500 uppercase">
+                              Limite total
+                            </span>
+                            <span className="text-sm font-bold text-slate-800">
+                              {limit > 0 ? formatCurrency(limit) : "Não definido"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[11px] font-medium text-slate-500 uppercase">
+                              Limite usado
+                            </span>
+                            <span className={`text-sm font-bold ${isOverLimit ? "text-red-600" : "text-amber-600"}`}>
+                              {formatCurrency(used)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[11px] font-medium text-slate-500 uppercase">
+                              Disponível
+                            </span>
+                            <span
+                              className={`text-sm font-bold ${
+                                available < 0 ? "text-red-600" : "text-emerald-600"
+                              }`}
+                            >
+                              {formatCurrency(available)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Barra de progresso de uso */}
+                        {limit > 0 && (
+                          <div>
+                            <div className="mb-1 flex justify-between text-xs text-slate-500">
+                              <span>Uso do limite</span>
+                              <span className={isOverLimit ? "font-bold text-red-600" : ""}>
+                                {usagePercentage}% {isOverLimit && "(Limite estourado!)"}
+                              </span>
+                            </div>
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  isOverLimit
+                                    ? "bg-red-600"
+                                    : usagePercentage >= 80
+                                    ? "bg-amber-500"
+                                    : "bg-emerald-500"
+                                }`}
+                                style={{ width: `${Math.min(100, usagePercentage)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </section>
       </main>

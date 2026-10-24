@@ -59,23 +59,31 @@ export function TransactionTable({
               <th className="p-4 font-medium">Descrição</th>
               <th className="p-4 font-medium">Data</th>
               <th className="p-4 font-medium text-right">Valor</th>
+              <th className="p-4 font-medium text-center">Status</th>
               <th className="p-4 font-medium text-center">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 text-sm">
             {transactions.length === 0 ? (
               <tr>
-                <td colSpan={4} className="p-8 text-center text-gray-500">
-                  Nenhuma transação neste mês.
+                <td colSpan={5} className="p-8 text-center text-gray-500">
+                  Nenhuma transação encontrada neste período.
                 </td>
               </tr>
             ) : (
               transactions.map((t) => (
                 <tr key={t.id} className="hover:bg-gray-50 transition">
                   <td className="p-4 font-medium text-gray-900">
-                    {t.description}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span>{t.description}</span>
+                      {t.card && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          💳 {t.card === "mercado_pago" ? "Mercado Pago" : t.card}
+                        </span>
+                      )}
+                    </div>
                     <span className="block text-xs text-gray-500 capitalize">
-                      {t.category}{t.card ? ` · ${t.card === "mercado_pago" ? "Mercado Pago" : t.card}` : ""}
+                      {t.category}
                     </span>
                   </td>
                   <td className="p-4 text-gray-500">{formatDate(t.date)}</td>
@@ -85,6 +93,28 @@ export function TransactionTable({
                     }`}
                   >
                     {t.type === "income" ? "+" : "-"} {formatCurrency(t.amount)}
+                  </td>
+                  <td className="p-4 text-center">
+                    {t.type === "expense" ? (
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                          t.is_paid
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-amber-50 text-amber-700 border border-amber-200"
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            t.is_paid ? "bg-emerald-600" : "bg-amber-500"
+                          }`}
+                        />
+                        {t.is_paid ? "Paga" : "Pendente"}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200">
+                        Recebido
+                      </span>
+                    )}
                   </td>
                   <td className="p-4 text-center space-x-3">
                     <button

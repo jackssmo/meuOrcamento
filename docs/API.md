@@ -16,7 +16,7 @@ Authorization: Bearer <token>
 
 ### `POST /auth/register`
 
-Cria uma conta.
+Cria uma conta e inicializa cartões padrão (Nubank, Inter, Mercado Pago).
 
 ```json
 {
@@ -55,17 +55,20 @@ Cria uma receita ou despesa.
 
 ```json
 {
-  "description": "Salário",
-  "amount": 3500,
-  "type": "income",
-  "category": "salario",
+  "description": "Supermercado",
+  "amount": 350.50,
+  "type": "expense",
+  "category": "alimentacao",
+  "card": "Nubank",
+  "is_paid": false,
   "date": "2026-10-30",
-  "is_fixed": true,
+  "is_fixed": false,
   "installments": 1
 }
 ```
 
 `is_fixed` é usado para receitas recorrentes. Para despesas parceladas, use `installments` maior que 1.
+`is_paid`: boolean que indica se a despesa já foi paga. Despesas pagas não comprometem o limite do cartão (o valor é abatido).
 
 ### `GET /transactions`
 
@@ -98,11 +101,21 @@ Recebe `month` e `year` e retorna receitas, despesas, saldo e saldo realizado.
 
 ### `PUT /transactions/:id`
 
-Edita descrição, valor, tipo, categoria e data da transação.
+Edita descrição, valor, tipo, categoria, data, cartão e status de pagamento (`is_paid`).
+
+### `PATCH /transactions/:id/payment`
+
+Alterna ou define o status de pagamento de uma despesa. Ao marcar como paga (`is_paid: true`), o limite do cartão associado é liberado automaticamente.
+
+```json
+{
+  "is_paid": true
+}
+```
 
 ### `DELETE /transactions/:id`
 
-Exclui uma transação. Se for uma receita fixa, remove também as ocorrências futuras da mesma série a partir da ocorrência selecionada.
+Exclui uma transação. Se for uma receita fixa ou parcelamento, pode remover ocorrências da mesma série via `?scope=series`.
 
 ## Relatórios
 
@@ -112,11 +125,11 @@ Retorna totais mensais do ano.
 
 ### `GET /financial/reports/monthly?month=10&year=2026`
 
-Retorna gastos por categoria e totais diários do mês.
+Retorna gastos por categoria, despesas por cartão e totais diários do mês.
 
 ## Recursos financeiros auxiliares
 
-Rotas autenticadas disponíveis para `accounts`, `categories`, `budgets` e `goals`:
+Rotas autenticadas disponíveis para `cards`, `accounts`, `categories`, `budgets` e `goals`:
 
 ```text
 GET    /financial/:resource
@@ -125,5 +138,8 @@ PATCH  /financial/:resource/:id
 DELETE /financial/:resource/:id
 ```
 
-Os recursos aceitos e seus campos são validados por Zod no backend.
+### Cartões de Crédito (`cards`)
 
+- `GET /financial/cards`: Retorna os cartões com `credit_limit`, `used_limit` (calculado a partir das despesas pendentes do cartão) e `available_limit` (`credit_limit - used_limit`).
+- `POST /financial/cards`: Cria cartão com `name` e `credit_limit`.
+- `PATCH /financial/cards/:id`: Atualiza `name` e/ou `credit_limit`.

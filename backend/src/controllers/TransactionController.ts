@@ -79,6 +79,34 @@ export class TransactionController {
         }
     }
 
+    async updatePaymentStatus(req: AuthRequest, res: Response): Promise<Response> {
+        try {
+            const userId = req.user?.id;
+            const id = req.params.id;
+
+            if (!userId) {
+                return res.status(401).json({ error: 'Usuário não autenticado.' });
+            }
+
+            if (typeof id !== 'string' || !/^\d+$/.test(id)) {
+                return res.status(400).json({ error: 'ID de transação inválido.' });
+            }
+
+            const transactionId = Number(id);
+
+            if (transactionId <= 0) {
+                return res.status(400).json({ error: 'ID de transação inválido.' });
+            }
+
+            const isPaid = typeof req.body?.is_paid === 'boolean' ? req.body.is_paid : undefined;
+            const result = await transactionService.togglePaymentStatus(transactionId, userId, isPaid);
+
+            return res.status(200).json(result);
+        } catch (error: any) {
+            return res.status(400).json({ error: error.message });
+        }
+    }
+
     async delete(req: AuthRequest, res: Response): Promise<Response> {
         try {
             const userId = req.user?.id;

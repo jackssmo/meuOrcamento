@@ -25,11 +25,12 @@ interface TransactionModalProps {
   card: string;
   setCard: (card: string) => void;
   cards: string[];
-  // Novos campos que criamos no backend:
   isFixed: boolean;
   setIsFixed: (value: boolean) => void;
   installments: string;
   setInstallments: (value: string) => void;
+  isPaid: boolean;
+  setIsPaid: (value: boolean) => void;
   categories?: string[];
 }
 
@@ -56,6 +57,8 @@ export function TransactionModal({
   setIsFixed,
   installments,
   setInstallments,
+  isPaid,
+  setIsPaid,
   categories = [],
 }: TransactionModalProps) {
   if (!isOpen) return null;
@@ -172,19 +175,42 @@ export function TransactionModal({
 
           {type === "expense" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cartão</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cartão de Crédito</label>
               <select
                 value={card}
                 onChange={(e) => setCard(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               >
-                <option value="">Selecione o cartão...</option>
+                <option value="">Nenhum (ou selecione um cartão)...</option>
                 {cards.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </div>
           )}
 
-          {/* CAMPO NOVO: Renda Fixa (Apenas para Receitas e se não estiver editando) */}
+          {/* Status de Pagamento (apenas para despesas) */}
+          {type === "expense" && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <label htmlFor="isPaid" className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="isPaid"
+                  checked={isPaid}
+                  onChange={(e) => setIsPaid(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-[#2454a6] focus:ring-[#2454a6]"
+                />
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-gray-800">
+                    Despesa já foi paga?
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    Despesas pagas não comprometem o limite do cartão (o valor é abatido).
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
+
+          {/* Renda Fixa (Apenas para Receitas e se não estiver editando) */}
           {!editingId && type === "income" && (
             <div className="flex items-center pt-2">
               <input
@@ -200,7 +226,7 @@ export function TransactionModal({
             </div>
           )}
 
-          {/* CAMPO NOVO: Parcelas (Apenas para Despesas e se não estiver editando) */}
+          {/* Parcelas (Apenas para Despesas e se não estiver editando) */}
           {!editingId && type === "expense" && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
