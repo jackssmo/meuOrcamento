@@ -12,6 +12,8 @@ interface TransactionTableProps {
   onSearchChange: (value: string) => void;
   onlyType: "all" | "income" | "expense";
   onTypeChange: (value: "all" | "income" | "expense") => void;
+  status: "all" | "paid" | "pending";
+  onStatusChange: (value: "all" | "paid" | "pending") => void;
   categories: string[];
   cards: string[];
   selectedCategory: string;
@@ -38,6 +40,8 @@ export function TransactionTable({
   onSearchChange,
   onlyType,
   onTypeChange,
+  status,
+  onStatusChange,
   categories,
   cards,
   selectedCategory,
@@ -61,7 +65,7 @@ export function TransactionTable({
         return first.localeCompare(second);
       });
 
-  const hasFilters = Boolean(search || selectedCategory || selectedCard || onlyType !== "all");
+  const hasFilters = Boolean(search || selectedCategory || selectedCard || onlyType !== "all" || status !== "all");
 
   return (
     <section className="surface overflow-hidden">
@@ -95,6 +99,11 @@ export function TransactionTable({
               <option value="income">Somente receitas</option>
               <option value="expense">Somente despesas</option>
             </select>
+            <select value={status} onChange={(event) => onStatusChange(event.target.value as "all" | "paid" | "pending")} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]">
+              <option value="all">Todos os status</option>
+              <option value="paid">Somente pagas</option>
+              <option value="pending">Somente pendentes</option>
+            </select>
             <select value={selectedCategory} onChange={(event) => onCategoryChange(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]">
               <option value="">Todas as categorias</option>
               {categories.map((item) => <option key={item} value={item}>{displayName(item)}</option>)}
@@ -104,17 +113,45 @@ export function TransactionTable({
               {cards.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2" aria-label="Agrupar transações">
-              <span className="self-center text-xs font-semibold text-slate-500">Exibir:</span>
-              {([["list", "Lista"], ["card", "Por cartão"], ["category", "Por categoria"]] as const).map(([value, label]) => (
-                <button key={value} type="button" onClick={() => onGroupModeChange(value)} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${groupMode === value ? "bg-[#2454a6] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-                  {label}
-                </button>
-              ))}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="Filtrar por status">
+                <span className="self-center text-xs font-semibold text-slate-500">Status:</span>
+                {([
+                  ["all", "Todas"],
+                  ["paid", " Pagas"],
+                  ["pending", " Pendentes"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onStatusChange(value)}
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                      status === value
+                        ? value === "paid"
+                          ? "bg-emerald-600 text-white"
+                          : value === "pending"
+                          ? "bg-amber-600 text-white"
+                          : "bg-[#2454a6] text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="Agrupar transações">
+                <span className="self-center text-xs font-semibold text-slate-500">Exibir:</span>
+                {([["list", "Lista"], ["card", "Por cartão"], ["category", "Por categoria"]] as const).map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => onGroupModeChange(value)} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${groupMode === value ? "bg-[#2454a6] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             {hasFilters && (
-              <button type="button" onClick={() => { onSearchChange(""); onTypeChange("all"); onCategoryChange(""); onCardChange(""); }} className="text-xs font-semibold text-[#2454a6] hover:underline">
+              <button type="button" onClick={() => { onSearchChange(""); onTypeChange("all"); onStatusChange("all"); onCategoryChange(""); onCardChange(""); }} className="text-xs font-semibold text-[#2454a6] hover:underline">
                 Limpar filtros
               </button>
             )}

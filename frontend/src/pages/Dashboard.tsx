@@ -103,6 +103,7 @@ export function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [search, setSearch] = useState("");
   const [onlyType, setOnlyType] = useState<"all" | "income" | "expense">("all");
+  const [status, setStatus] = useState<"all" | "paid" | "pending">("all");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedCard, setSelectedCard] = useState("");
   const [groupMode, setGroupMode] = useState<"list" | "card" | "category">("list");
@@ -110,14 +111,25 @@ export function Dashboard() {
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, balance: 0, realizedBalance: 0 });
+  const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, paidExpense: 0, pendingExpense: 0, balance: 0, realizedBalance: 0 });
   const [categoryTotals, setCategoryTotals] = useState<Record<string, number>>({});
   const [cardTotals, setCardTotals] = useState<Record<string, number>>({});
 
   const fetchTransactions = useCallback(async () => {
     try {
       const response = await api.get("/transactions", {
-        params: { month: selectedMonth, year: selectedYear, search, category: selectedCategory || undefined, card: selectedCard || undefined, group: groupMode === "list" ? undefined : groupMode, type: onlyType === "all" ? undefined : onlyType, page, pageSize: 20 },
+        params: {
+          month: selectedMonth,
+          year: selectedYear,
+          search,
+          category: selectedCategory || undefined,
+          card: selectedCard || undefined,
+          group: groupMode === "list" ? undefined : groupMode,
+          type: onlyType === "all" ? undefined : onlyType,
+          status: status === "all" ? undefined : status,
+          page,
+          pageSize: 20,
+        },
       });
       setTransactions(response.data.data);
       setTotalPages(response.data.pagination.totalPages);
@@ -125,7 +137,7 @@ export function Dashboard() {
       console.error(error);
       toast.error("Erro ao buscar transações.");
     }
-  }, [selectedMonth, selectedYear, search, selectedCategory, selectedCard, groupMode, onlyType, page]);
+  }, [selectedMonth, selectedYear, search, selectedCategory, selectedCard, groupMode, onlyType, status, page]);
 
   const refreshFinancialData = useCallback(async () => {
     const [summaryResponse, historyResponse, categoryResponse, cardsResponse] = await Promise.all([
@@ -163,7 +175,7 @@ export function Dashboard() {
   useEffect(() => {
     void Promise.resolve().then(fetchTransactions);
     void Promise.resolve().then(refreshFinancialData).catch(() => {
-      setSummary({ totalIncome: 0, totalExpense: 0, balance: 0, realizedBalance: 0 });
+      setSummary({ totalIncome: 0, totalExpense: 0, paidExpense: 0, pendingExpense: 0, balance: 0, realizedBalance: 0 });
       setMonthlyHistory([]);
       setCategoryTotals({});
       setCardTotals({});
@@ -431,7 +443,18 @@ export function Dashboard() {
         </div>
 
         {/* Cards de resumo */}
-        <SummaryCards income={income} expense={expense} balance={balance} />
+        <SummaryCards
+          income={income}
+          expense={expense}
+          balance={balance}
+          paidExpense={Number(summary.paidExpense || 0)}
+          pendingExpense={Number(summary.pendingExpense || 0)}
+          activeStatus={status}
+          onSelectStatus={(s) => {
+            setStatus(s);
+            setPage(1);
+          }}
+        />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
             <TransactionTable
@@ -448,6 +471,11 @@ export function Dashboard() {
               onlyType={onlyType}
               onTypeChange={(value) => {
                 setOnlyType(value);
+                setPage(1);
+              }}
+              status={status}
+              onStatusChange={(value) => {
+                setStatus(value);
                 setPage(1);
               }}
               categories={categoryOptions}

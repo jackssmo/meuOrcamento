@@ -66,6 +66,7 @@ export class TransactionRepository {
 
   async findByUserId(userId: number, options: {
     month?: number; year?: number; search?: string; category?: string; card?: string; group?: 'card' | 'category'; type?: 'income' | 'expense';
+    status?: 'paid' | 'pending';
     page: number; pageSize: number;
   }): Promise<{ rows: Transaction[]; total: number }> {
     const filters = ['user_id = ?'];
@@ -94,6 +95,11 @@ export class TransactionRepository {
     if (options.type) {
       filters.push('type = ?');
       values.push(options.type);
+    }
+    if (options.status === 'paid') {
+      filters.push('is_paid = 1');
+    } else if (options.status === 'pending') {
+      filters.push("type = 'expense' AND (is_paid = 0 OR is_paid IS NULL)");
     }
     const where = filters.join(' AND ');
     const offset = (options.page - 1) * options.pageSize;
@@ -276,12 +282,21 @@ export class TransactionRepository {
     ]);
   }
 
-  async getSummary(userId: number, month?: number, year?: number): Promise<{ totalIncome: number; totalExpense: number; balance: number; realizedBalance: number }> {
+  async getSummary(userId: number, month?: number, year?: number): Promise<{
+    totalIncome: number;
+    totalExpense: number;
+    paidExpense: number;
+    pendingExpense: number;
+    balance: number;
+    realizedBalance: number;
+  }> {
     const period = month !== undefined && year !== undefined ? ' AND MONTH(date) = ? AND YEAR(date) = ?' : '';
     const query = `
       SELECT 
         COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS totalIncome,
         COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS totalExpense,
+        COALESCE(SUM(CASE WHEN type = 'expense' AND is_paid = 1 THEN amount ELSE 0 END), 0) AS paidExpense,
+        COALESCE(SUM(CASE WHEN type = 'expense' AND (is_paid = 0 OR is_paid IS NULL) THEN amount ELSE 0 END), 0) AS pendingExpense,
         COALESCE(SUM(CASE WHEN date <= CURRENT_DATE AND type = 'income' THEN amount
           WHEN date <= CURRENT_DATE AND type = 'expense' THEN -amount ELSE 0 END), 0) AS realizedBalance
       FROM transactions 
@@ -295,12 +310,16 @@ export class TransactionRepository {
     // Convertemos para Number pois o driver do MySQL pode retornar campos DECIMAL como string
     const totalIncome = Number(row?.totalIncome) || 0;
     const totalExpense = Number(row?.totalExpense) || 0;
+    const paidExpense = Number(row?.paidExpense) || 0;
+    const pendingExpense = Number(row?.pendingExpense) || 0;
     const balance = totalIncome - totalExpense;
     const realizedBalance = Number(row?.realizedBalance) || 0;
 
     return {
       totalIncome,
       totalExpense,
+      paidExpense,
+      pendingExpense,
       balance,
       realizedBalance
     };
