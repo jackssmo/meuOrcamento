@@ -746,47 +746,6 @@ export function Dashboard() {
         </div>
       )}
 
-      {showEditScope && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="text-xl font-bold text-slate-800">Atualizar parcelamento</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Esta é uma despesa parcelada. Como deseja aplicar a alteração?
-            </p>
-
-            <div className="mt-5 space-y-3">
-              <button
-                type="button"
-                onClick={() => {
-                  const numericAmount = Number(amount.replace(/\./g, "").replace(",", "."));
-                  void submitTransaction(numericAmount, false);
-                }}
-                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Atualizar apenas esta parcela
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const numericAmount = Number(amount.replace(/\./g, "").replace(",", "."));
-                  void submitTransaction(numericAmount, true);
-                }}
-                className="w-full rounded-lg bg-[#2454a6] px-4 py-3 text-left text-sm font-semibold text-white hover:bg-[#1c4386]"
-              >
-                Editar esta e as próximas parcelas
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowEditScope(false)}
-                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <TransactionModal
         isOpen={isModalOpen}
         onClose={closeModal}
@@ -814,6 +773,47 @@ export function Dashboard() {
         setIsPaid={setIsPaid}
         categories={customCategories}
       />
+
+      {showEditScope && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <h2 className="text-xl font-bold text-slate-800">Atualizar parcelamento</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Esta é uma despesa parcelada. Como deseja aplicar a alteração?
+            </p>
+
+            <div className="mt-5 space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const numericAmount = Number(amount.replace(/\./g, "").replace(",", "."));
+                  void submitTransaction(numericAmount, false);
+                }}
+                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Atualizar apenas esta parcela
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const numericAmount = Number(amount.replace(/\./g, "").replace(",", "."));
+                  void submitTransaction(numericAmount, true);
+                }}
+                className="w-full rounded-lg bg-[#2454a6] px-4 py-3 text-left text-sm font-semibold text-white hover:bg-[#1c4386] transition"
+              >
+                Editar esta e as próximas parcelas
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEditScope(false)}
+                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
