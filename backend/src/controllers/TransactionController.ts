@@ -33,11 +33,17 @@ export class TransactionController {
             const year = req.query.year ? Number(req.query.year) : undefined;
             const type = req.query.type === 'income' || req.query.type === 'expense' ? req.query.type : undefined;
             const search = typeof req.query.search === 'string' ? req.query.search.trim() : undefined;
+            const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
+            const card = typeof req.query.card === 'string' ? req.query.card.trim() : undefined;
+            const group = req.query.group === 'card' || req.query.group === 'category' ? req.query.group : undefined;
             const options = { page, pageSize } as Parameters<typeof transactionService.getTransactionsByUserId>[1];
             if (month !== undefined) options.month = month;
             if (year !== undefined) options.year = year;
             if (type !== undefined) options.type = type;
             if (search !== undefined) options.search = search;
+            if (category !== undefined) options.category = category;
+            if (card !== undefined) options.card = card;
+            if (group !== undefined) options.group = group;
             const result = await transactionService.getTransactionsByUserId(userId, options);
             return res.status(200).json({ data: result.rows, pagination: { page, pageSize, total: result.total, totalPages: Math.ceil(result.total / pageSize) } });
         }

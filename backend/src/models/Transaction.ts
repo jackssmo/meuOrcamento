@@ -16,5 +16,3 @@ export interface Transaction {
   is_paid?: boolean;
   created_at?: Date;
 }
-
-}

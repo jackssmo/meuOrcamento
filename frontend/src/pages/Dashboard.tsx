@@ -103,6 +103,9 @@ export function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [search, setSearch] = useState("");
   const [onlyType, setOnlyType] = useState<"all" | "income" | "expense">("all");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCard, setSelectedCard] = useState("");
+  const [groupMode, setGroupMode] = useState<"list" | "card" | "category">("list");
   const [monthlyHistory, setMonthlyHistory] = useState<{ month: number; income: number; expense: number }[]>([]);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [page, setPage] = useState(1);
@@ -114,7 +117,7 @@ export function Dashboard() {
   const fetchTransactions = useCallback(async () => {
     try {
       const response = await api.get("/transactions", {
-        params: { month: selectedMonth, year: selectedYear, search, type: onlyType === "all" ? undefined : onlyType, page, pageSize: 20 },
+        params: { month: selectedMonth, year: selectedYear, search, category: selectedCategory || undefined, card: selectedCard || undefined, group: groupMode === "list" ? undefined : groupMode, type: onlyType === "all" ? undefined : onlyType, page, pageSize: 20 },
       });
       setTransactions(response.data.data);
       setTotalPages(response.data.pagination.totalPages);
@@ -122,7 +125,7 @@ export function Dashboard() {
       console.error(error);
       toast.error("Erro ao buscar transações.");
     }
-  }, [selectedMonth, selectedYear, search, onlyType, page]);
+  }, [selectedMonth, selectedYear, search, selectedCategory, selectedCard, groupMode, onlyType, page]);
 
   const refreshFinancialData = useCallback(async () => {
     const [summaryResponse, historyResponse, categoryResponse, cardsResponse] = await Promise.all([
@@ -321,6 +324,8 @@ export function Dashboard() {
   }
 
   const filteredTransactions = transactions;
+  const categoryOptions = Array.from(new Set([...Object.keys(categoryLabels), ...Object.keys(categoryTotals), ...customCategories])).sort();
+  const cardOptions = Array.from(new Set([...cards, ...Object.keys(cardTotals)])).sort();
 
   const income = Number(summary.totalIncome);
   const expense = Number(summary.totalExpense);
@@ -422,9 +427,32 @@ export function Dashboard() {
               onDelete={handleDelete}
               onOpenModal={() => setIsModalOpen(true)}
               search={search}
-              onSearchChange={setSearch}
+              onSearchChange={(value) => {
+                setSearch(value);
+                setPage(1);
+              }}
               onlyType={onlyType}
-              onTypeChange={setOnlyType}
+              onTypeChange={(value) => {
+                setOnlyType(value);
+                setPage(1);
+              }}
+              categories={categoryOptions}
+              cards={cardOptions}
+              selectedCategory={selectedCategory}
+              onCategoryChange={(value) => {
+                setSelectedCategory(value);
+                setPage(1);
+              }}
+              selectedCard={selectedCard}
+              onCardChange={(value) => {
+                setSelectedCard(value);
+                setPage(1);
+              }}
+              groupMode={groupMode}
+              onGroupModeChange={(value) => {
+                setGroupMode(value);
+                setPage(1);
+              }}
             />
             {totalPages > 1 && (
               <div className="mt-3 flex items-center justify-between px-2 text-sm text-slate-500">
