@@ -284,6 +284,19 @@ export function Dashboard() {
     }
   }
 
+  async function handleTogglePaid(transaction: Transaction) {
+    if (!transaction.id) return;
+    try {
+      const nextStatus = !transaction.is_paid;
+      await api.patch(`/transactions/${transaction.id}/payment`, { is_paid: nextStatus });
+      toast.success(nextStatus ? "Despesa marcada como paga!" : "Despesa marcada como pendente.");
+      await Promise.all([fetchTransactions(), refreshFinancialData()]);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao atualizar status de pagamento.");
+    }
+  }
+
   async function handlePayCardBill(cardId: number, cardName: string) {
     const monthLabel = monthLabels[selectedMonth - 1];
     if (!window.confirm(`Confirma o pagamento da fatura de "${cardName}" referente a ${monthLabel} de ${selectedYear}?\n\nTodas as despesas pendentes deste cartão neste mês serão marcadas como pagas e o limite será liberado.`)) return;
@@ -426,6 +439,7 @@ export function Dashboard() {
               onEdit={handleEditClick}
               onDelete={handleDelete}
               onOpenModal={() => setIsModalOpen(true)}
+              onTogglePaid={(t) => void handleTogglePaid(t)}
               search={search}
               onSearchChange={(value) => {
                 setSearch(value);

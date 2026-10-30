@@ -7,6 +7,7 @@ interface TransactionTableProps {
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
   onOpenModal: () => void;
+  onTogglePaid?: (transaction: Transaction) => void;
   search: string;
   onSearchChange: (value: string) => void;
   onlyType: "all" | "income" | "expense";
@@ -32,6 +33,7 @@ export function TransactionTable({
   onEdit,
   onDelete,
   onOpenModal,
+  onTogglePaid,
   search,
   onSearchChange,
   onlyType,
@@ -173,8 +175,12 @@ export function TransactionTable({
                   </td>
                   <td className="p-4 text-center">
                     {t.type === "expense" ? (
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      <button
+                        onClick={() => onTogglePaid?.(t)}
+                        title={t.is_paid ? "Clique para marcar como pendente" : "Clique para marcar como paga"}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-opacity ${
+                          onTogglePaid ? "cursor-pointer hover:opacity-75 active:opacity-60" : "cursor-default"
+                        } ${
                           t.is_paid
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : "bg-amber-50 text-amber-700 border border-amber-200"
@@ -186,7 +192,7 @@ export function TransactionTable({
                           }`}
                         />
                         {t.is_paid ? "Paga" : "Pendente"}
-                      </span>
+                      </button>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200">
                         Recebido
