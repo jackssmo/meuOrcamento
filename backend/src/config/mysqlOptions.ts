@@ -13,6 +13,9 @@ export function getMysqlOptions(): ConnectionOptions {
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
       database: parsed.pathname.replace(/^\//, ''),
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
+      dateStrings: true,
     };
 
     if (process.env.DB_SSL_CA) {
@@ -39,6 +42,9 @@ export function getMysqlOptions(): ConnectionOptions {
     password: required('DB_PASSWORD'),
     database: required('DB_NAME'),
     port: Number(process.env.DB_PORT || 3306),
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+    dateStrings: true,
     ...(process.env.DB_SSL === 'true'
       ? { ssl: { rejectUnauthorized: false } }
       : {}),

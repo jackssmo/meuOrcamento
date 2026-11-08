@@ -111,9 +111,11 @@ export function Dashboard() {
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalTransactions, setTotalTransactions] = useState(0);
   const [summary, setSummary] = useState({ totalIncome: 0, totalExpense: 0, paidExpense: 0, pendingExpense: 0, balance: 0, realizedBalance: 0 });
   const [categoryTotals, setCategoryTotals] = useState<Record<string, number>>({});
   const [cardTotals, setCardTotals] = useState<Record<string, number>>({});
+  const [cardUnpaidTotals, setCardUnpaidTotals] = useState<Record<string, number>>({});
 
   const fetchTransactions = useCallback(async () => {
     try {
@@ -133,6 +135,7 @@ export function Dashboard() {
       });
       setTransactions(response.data.data);
       setTotalPages(response.data.pagination.totalPages);
+      setTotalTransactions(response.data.pagination.total || 0);
     } catch (error) {
       console.error(error);
       toast.error("Erro ao buscar transações.");
@@ -157,15 +160,14 @@ export function Dashboard() {
           return result;
         }, {}),
     );
-    setCardTotals(
-      (categoryResponse.data.byCard || []).reduce(
-        (result: Record<string, number>, item: { card: string; total: number }) => {
-          result[item.card] = Number(item.total);
-          return result;
-        },
-        {},
-      ),
-    );
+    const cardsTotalMap: Record<string, number> = {};
+    const cardsUnpaidMap: Record<string, number> = {};
+    for (const item of (categoryResponse.data.byCard || [])) {
+      cardsTotalMap[item.card] = Number(item.total) || 0;
+      cardsUnpaidMap[item.card] = Number(item.unpaid_total) || 0;
+    }
+    setCardTotals(cardsTotalMap);
+    setCardUnpaidTotals(cardsUnpaidMap);
     setCardsList(cardsResponse.data || []);
     setCards((cardsResponse.data || []).map((item: CardItem) => item.name));
   }, [selectedMonth, selectedYear]);
@@ -179,6 +181,7 @@ export function Dashboard() {
       setMonthlyHistory([]);
       setCategoryTotals({});
       setCardTotals({});
+      setCardUnpaidTotals({});
       setCardsList([]);
       setCards([]);
     });
@@ -261,8 +264,8 @@ export function Dashboard() {
         card: type === "expense" && card ? card : null,
         is_paid: type === "expense" ? isPaid : false,
         date,
-        is_fixed: isFixed,
-        installments: Number(installments),
+        is_fixed: type === "income" ? isFixed : false,
+        installments: type === "expense" ? Number(installments) || 1 : 1,
       };
 
       if (editingId) {
@@ -459,6 +462,7 @@ export function Dashboard() {
           <div className="lg:col-span-2">
             <TransactionTable
               transactions={filteredTransactions}
+              total={totalTransactions}
               onEdit={handleEditClick}
               onDelete={handleDelete}
               onOpenModal={() => setIsModalOpen(true)}
@@ -594,8 +598,9 @@ export function Dashboard() {
                     const usagePercentage = limit > 0 ? Math.round((used / limit) * 100) : 0;
                     const isOverLimit = limit > 0 && used > limit;
                     const monthSpent = cardTotals[c.name] || 0;
+                    const monthUnpaid = cardUnpaidTotals[c.name] || 0;
                     // fatura quitada quando não há despesas pendentes no mês
-                    const billAlreadyPaid = monthSpent > 0 && used === 0;
+                    const billAlreadyPaid = monthSpent > 0 && monthUnpaid === 0;
 
                     return (
                       <div
@@ -681,7 +686,7 @@ export function Dashboard() {
                               onClick={() => void handlePayCardBill(c.id, c.name)}
                               className="w-full rounded-lg border border-[#2454a6] bg-white px-3 py-2 text-xs font-semibold text-[#2454a6] transition hover:bg-[#2454a6] hover:text-white"
                             >
-                              💳 Pagar fatura de {monthLabels[selectedMonth - 1]}
+                              💳 Pagar fatura de {monthLabels[selectedMonth - 1]} ({formatCurrency(monthUnpaid)})
                             </button>
                           )
                         )}

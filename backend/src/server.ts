@@ -29,7 +29,7 @@ app.use(cors({
   },
 }));
 app.use(express.json());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false }));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 1500, standardHeaders: 'draft-7', legacyHeaders: false }));
 
 app.use('/auth', authRoutes);
 app.use('/transactions', transactionRoutes);

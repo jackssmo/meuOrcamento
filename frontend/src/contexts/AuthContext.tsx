@@ -31,11 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api.get<AuthUser>("/auth/me")
       .then((response) => setUser(response.data))
       .catch((error: unknown) => {
-        if (!isAxiosError(error) || error.response?.status !== 401) {
-          console.error("Não foi possível validar a sessão.", error);
+        if (isAxiosError(error) && error.response?.status === 401) {
+          localStorage.removeItem("fintrack_token");
+          setUser(null);
+        } else {
+          console.error("Não foi possível validar a sessão com o servidor no momento.", error);
         }
-        localStorage.removeItem("fintrack_token");
-        setUser(null);
       })
       .finally(() => setLoading(false));
   }, []);

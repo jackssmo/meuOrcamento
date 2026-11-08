@@ -180,7 +180,8 @@ export class TransactionRepository {
           type = ?,
           category = ?,
           card = ?,
-          date = DATE(TIMESTAMPADD(MONTH, installment_number - ?, ?))
+          date = DATE(TIMESTAMPADD(MONTH, installment_number - ?, ?)),
+          is_paid = CASE WHEN installment_number = ? THEN ? ELSE is_paid END
       WHERE user_id = ?
         AND type = 'expense'
         AND is_fixed = 0
@@ -205,6 +206,8 @@ export class TransactionRepository {
       transaction.card ?? null,
       installmentNumber,
       transaction.date,
+      installmentNumber,
+      transaction.is_paid ? 1 : 0,
       transaction.user_id,
       totalInstallments,
       installmentNumber,
@@ -266,9 +269,15 @@ export class TransactionRepository {
           OR (
             type = 'income'
             AND is_fixed = 1
-            AND category = ?
-            AND amount = ?
-            AND description LIKE ?
+            AND (
+              (? IS NOT NULL AND installment_group_id = ?)
+              OR (
+                ? IS NULL
+                AND category = ?
+                AND amount = ?
+                AND description LIKE ?
+              )
+            )
           )
         )
     `;
@@ -276,6 +285,9 @@ export class TransactionRepository {
       userId,
       transaction.date,
       transaction.id,
+      transaction.installment_group_id ?? null,
+      transaction.installment_group_id ?? null,
+      transaction.installment_group_id ?? null,
       transaction.category,
       transaction.amount,
       `${baseDescription} (%/12)`,

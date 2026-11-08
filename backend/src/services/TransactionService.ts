@@ -18,7 +18,7 @@ export class TransactionService {
             throw new Error("A recorrência fixa está disponível apenas para receitas.");
         }
 
-        const occurrenceCount = is_fixed ? 12 : (installments ?? 1);
+        const occurrenceCount = type === 'income' ? (is_fixed ? 12 : 1) : (installments ?? 1);
         const installmentAmount = Math.round(amount * 100) / 100;
         const firstDate = new Date(date);
         firstDate.setUTCHours(0, 0, 0, 0);
@@ -74,7 +74,11 @@ export class TransactionService {
 
         const parsed = transactionSchema.safeParse(data);
         if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Dados da transação inválidos.');
-        if (parsed.data.card && !(await this.transactionRepository.cardBelongsToUser(userId, parsed.data.card))) {
+        if (
+            parsed.data.card &&
+            parsed.data.card !== existingTransaction.card &&
+            !(await this.transactionRepository.cardBelongsToUser(userId, parsed.data.card))
+        ) {
             throw new Error('O cartão selecionado não pertence à sua conta.');
         }
 

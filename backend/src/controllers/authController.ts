@@ -42,7 +42,7 @@ export class AuthController {
       const { password_hash, ...userWithoutPassword } = user;
 
       const payload = { id: user.id, email: user.email };
-      const token = jwt.sign(payload, env.jwtSecret, { expiresIn: '1h' });
+      const token = jwt.sign(payload, env.jwtSecret, { expiresIn: '7d' });
       
       return res.status(200).json({ 
         message: 'Login bem-sucedido!', 
@@ -51,18 +51,26 @@ export class AuthController {
       });
 
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'E-mail ou senha incorretos';
-      return res.status(401).json({ error: message });
+      if (error instanceof Error && error.message === 'E-mail ou senha incorretos') {
+        return res.status(401).json({ error: error.message });
+      }
+      console.error('Erro de conexão/banco durante autenticação:', error);
+      return res.status(500).json({ error: 'Erro de conexão com o banco de dados. Tente novamente em instantes.' });
     }
   }
 
   async profile(req: Request, res: Response): Promise<Response> {
-    const user = (req as Request & { user?: { id: number } }).user;
-    if (!user?.id) return res.status(401).json({ error: 'Usuário não autenticado.' });
-    const found = await userRepository.findById(user.id);
-    if (!found) return res.status(404).json({ error: 'Usuário não encontrado.' });
-    const { password_hash, ...safeUser } = found;
-    return res.status(200).json(safeUser);
+    try {
+      const user = (req as Request & { user?: { id: number } }).user;
+      if (!user?.id) return res.status(401).json({ error: 'Usuário não autenticado.' });
+      const found = await userRepository.findById(user.id);
+      if (!found) return res.status(404).json({ error: 'Usuário não encontrado.' });
+      const { password_hash, ...safeUser } = found;
+      return res.status(200).json(safeUser);
+    } catch (error) {
+      console.error('Erro ao consultar perfil:', error);
+      return res.status(500).json({ error: 'Erro de comunicação com o banco de dados.' });
+    }
   }
 
   async updateProfile(req: AuthRequest, res: Response): Promise<Response> {

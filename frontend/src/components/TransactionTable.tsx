@@ -4,6 +4,7 @@ import { Fragment } from "react";
 
 interface TransactionTableProps {
   transactions: Transaction[];
+  total?: number;
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
   onOpenModal: () => void;
@@ -32,6 +33,7 @@ function displayName(value: string): string {
 
 export function TransactionTable({
   transactions,
+  total,
   onEdit,
   onDelete,
   onOpenModal,
@@ -66,13 +68,14 @@ export function TransactionTable({
       });
 
   const hasFilters = Boolean(search || selectedCategory || selectedCard || onlyType !== "all" || status !== "all");
+  const count = total !== undefined ? total : transactions.length;
 
   return (
     <section className="surface overflow-hidden">
       <div className="p-6 border-b border-gray-200 flex justify-between items-center">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Transações</h2>
-          <p className="mt-1 text-xs text-slate-500">{transactions.length} encontradas neste período</p>
+          <p className="mt-1 text-xs text-slate-500">{count} {count === 1 ? "encontrada" : "encontradas"} neste período</p>
         </div>
         <button
           onClick={onOpenModal}

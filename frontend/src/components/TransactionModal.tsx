@@ -82,7 +82,13 @@ export function TransactionModal({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setType("income")}
+                onClick={() => {
+                  setType("income");
+                  setIsFixed(false);
+                  setInstallments("1");
+                  setCard("");
+                  setIsPaid(false);
+                }}
                 className={`py-2 rounded-lg font-medium text-sm transition ${
                   type === "income"
                     ? "bg-emerald-100 text-emerald-700 border-2 border-emerald-500"
@@ -93,7 +99,10 @@ export function TransactionModal({
               </button>
               <button
                 type="button"
-                onClick={() => setType("expense")}
+                onClick={() => {
+                  setType("expense");
+                  setIsFixed(false);
+                }}
                 className={`py-2 rounded-lg font-medium text-sm transition ${
                   type === "expense"
                     ? "bg-red-100 text-red-700 border-2 border-red-500"
