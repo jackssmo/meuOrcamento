@@ -86,50 +86,92 @@ export function TransactionTable({
       </div>
       <div className="border-b border-gray-200 bg-[#fafbfd] p-4">
         <div className="space-y-3">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="relative min-w-0 flex-1">
-              <span className="pointer-events-none absolute left-3 top-2 text-slate-400" aria-hidden="true">⌕</span>
-              <input
-                value={search}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Buscar descrição, categoria ou cartão"
-                aria-label="Buscar transações"
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
-              />
-            </div>
-            <select value={onlyType} onChange={(event) => onTypeChange(event.target.value as "all" | "income" | "expense")} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]">
+          {/* Barra de busca ampla com texto 100% legível */}
+          <div className="relative w-full">
+            <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400 text-base" aria-hidden="true">
+              🔍
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Buscar por descrição, categoria ou cartão..."
+              aria-label="Buscar transações"
+              className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-9 text-sm font-medium text-slate-800 placeholder:text-slate-400 outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5] shadow-xs"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => onSearchChange("")}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer"
+                title="Limpar busca"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Filtros em grid responsivo */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <select
+              value={onlyType}
+              onChange={(event) => onTypeChange(event.target.value as "all" | "income" | "expense")}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
+            >
               <option value="all">Todos os tipos</option>
               <option value="income">Somente receitas</option>
               <option value="expense">Somente despesas</option>
             </select>
-            <select value={status} onChange={(event) => onStatusChange(event.target.value as "all" | "paid" | "pending")} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]">
+            <select
+              value={status}
+              onChange={(event) => onStatusChange(event.target.value as "all" | "paid" | "pending")}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
+            >
               <option value="all">Todos os status</option>
               <option value="paid">Somente pagas</option>
               <option value="pending">Somente pendentes</option>
             </select>
-            <select value={selectedCategory} onChange={(event) => onCategoryChange(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]">
+            <select
+              value={selectedCategory}
+              onChange={(event) => onCategoryChange(event.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
+            >
               <option value="">Todas as categorias</option>
-              {categories.map((item) => <option key={item} value={item}>{displayName(item)}</option>)}
+              {categories.map((item) => (
+                <option key={item} value={item}>
+                  {displayName(item)}
+                </option>
+              ))}
             </select>
-            <select value={selectedCard} onChange={(event) => onCardChange(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]">
+            <select
+              value={selectedCard}
+              onChange={(event) => onCardChange(event.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2454a6] focus:ring-2 focus:ring-[#c8d9f5]"
+            >
               <option value="">Todos os cartões</option>
-              {cards.map((item) => <option key={item} value={item}>{item}</option>)}
+              {cards.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
             </select>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+
+          {/* Ações de status rápido, agrupamento e limpar filtros */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-wrap items-center gap-1.5" aria-label="Filtrar por status">
                 <span className="self-center text-xs font-semibold text-slate-500">Status:</span>
                 {([
                   ["all", "Todas"],
-                  ["paid", " Pagas"],
-                  ["pending", " Pendentes"],
+                  ["paid", "✓ Pagas"],
+                  ["pending", "⏳ Pendentes"],
                 ] as const).map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
                     onClick={() => onStatusChange(value)}
-                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
                       status === value
                         ? value === "paid"
                           ? "bg-emerald-600 text-white"
@@ -147,14 +189,33 @@ export function TransactionTable({
               <div className="flex flex-wrap items-center gap-1.5" aria-label="Agrupar transações">
                 <span className="self-center text-xs font-semibold text-slate-500">Exibir:</span>
                 {([["list", "Lista"], ["card", "Por cartão"], ["category", "Por categoria"]] as const).map(([value, label]) => (
-                  <button key={value} type="button" onClick={() => onGroupModeChange(value)} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${groupMode === value ? "bg-[#2454a6] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onGroupModeChange(value)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                      groupMode === value
+                        ? "bg-[#2454a6] text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
                     {label}
                   </button>
                 ))}
               </div>
             </div>
             {hasFilters && (
-              <button type="button" onClick={() => { onSearchChange(""); onTypeChange("all"); onStatusChange("all"); onCategoryChange(""); onCardChange(""); }} className="text-xs font-semibold text-[#2454a6] hover:underline">
+              <button
+                type="button"
+                onClick={() => {
+                  onSearchChange("");
+                  onTypeChange("all");
+                  onStatusChange("all");
+                  onCategoryChange("");
+                  onCardChange("");
+                }}
+                className="text-xs font-semibold text-[#2454a6] hover:underline cursor-pointer"
+              >
                 Limpar filtros
               </button>
             )}
