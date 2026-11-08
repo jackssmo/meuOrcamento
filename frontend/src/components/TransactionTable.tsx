@@ -89,7 +89,6 @@ export function TransactionTable({
           {/* Barra de busca ampla com texto 100% legível */}
           <div className="relative w-full">
             <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400 text-base" aria-hidden="true">
-              🔍
             </span>
             <input
               type="text"
@@ -164,8 +163,8 @@ export function TransactionTable({
                 <span className="self-center text-xs font-semibold text-slate-500">Status:</span>
                 {([
                   ["all", "Todas"],
-                  ["paid", "✓ Pagas"],
-                  ["pending", "⏳ Pendentes"],
+                  ["paid", " Pagas"],
+                  ["pending", " Pendentes"],
                 ] as const).map(([value, label]) => (
                   <button
                     key={value}
