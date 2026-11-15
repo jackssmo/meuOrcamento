@@ -15,7 +15,7 @@ const PAGE_METADATA: Record<string, { title: string; subtitle: string }> = {
   },
   "/planning": {
     title: "Planejamento",
-    subtitle: "Gerencie cartões, metas de poupança e orçamentos por categoria.",
+    subtitle: "Gerencie cartões e metas de poupança.",
   },
   "/settings": {
     title: "Conta e Ajustes",

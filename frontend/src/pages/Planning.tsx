@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   CreditCard,
-  PieChart,
   PiggyBank,
   Plus,
   Pencil,
@@ -19,8 +18,8 @@ import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { formatCurrency, formatCurrencyInput, formatDate } from "../utils/formatters";
-import { DEFAULT_CATEGORY_LABELS, MONTH_NAMES } from "../constants/designSystem";
-import type { CardItem, Budget, Goal, Category } from "../types/models";
+import { MONTH_NAMES } from "../constants/designSystem";
+import type { CardItem, Goal } from "../types/models";
 
 export function Planning() {
   const {
@@ -31,17 +30,14 @@ export function Planning() {
     triggerRefresh,
   } = useFinancial();
 
-  const [activeTab, setActiveTab] = useState<"cards" | "budgets" | "goals">("cards");
+  const [activeTab, setActiveTab] = useState<"cards" | "goals">("cards");
 
-  // Dados das 3 abas
+  // Dados das abas
   const [cards, setCards] = useState<CardItem[]>([]);
-  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [categoriesList, setCustomCategories] = useState<Category[]>([]);
 
   // Dados do relatório mensal (gastos reais por cartão e por categoria no mês ativo)
   const [byCardExpenses, setByCardExpenses] = useState<Record<string, number>>({});
-  const [byCategoryExpenses, setByCategoryExpenses] = useState<Record<string, number>>({});
   const [cardUnpaidExpenses, setCardUnpaidExpenses] = useState<Record<string, number>>({});
 
   // Modais de Formulários (Criação/Edição)
@@ -49,11 +45,6 @@ export function Planning() {
   const [editingCard, setEditingCard] = useState<CardItem | null>(null);
   const [cardName, setCardName] = useState("");
   const [cardLimitInput, setCardLimitInput] = useState("");
-
-  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
-  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
-  const [budgetCategory, setBudgetCategory] = useState("");
-  const [budgetAmountInput, setBudgetAmountInput] = useState("");
 
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
@@ -68,7 +59,7 @@ export function Planning() {
 
   // Modais de Confirmação Bespoke (Zero window.confirm)
   const [itemToDelete, setItemToDelete] = useState<{
-    type: "card" | "budget" | "goal";
+    type: "card" | "goal";
     id: number;
     title: string;
   } | null>(null);
@@ -76,14 +67,12 @@ export function Planning() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. Carregar Cartões, Orçamentos, Metas e Relatórios do Mês
+  // 1. Carregar Cartões, Metas e Relatórios do Mês
   const loadPlanningData = useCallback(async () => {
     try {
-      const [cardsRes, budgetsRes, goalsRes, categoriesRes, reportRes, pendingRes] = await Promise.all([
+      const [cardsRes, goalsRes, reportRes, pendingRes] = await Promise.all([
         api.get<CardItem[]>("/financial/cards"),
-        api.get<Budget[]>("/financial/budgets"),
         api.get<Goal[]>("/financial/goals"),
-        api.get<Category[]>("/financial/categories"),
         api.get("/financial/reports/monthly", {
           params: { month: selectedMonth, year: selectedYear },
         }),
@@ -99,13 +88,10 @@ export function Planning() {
       ]);
 
       setCards(cardsRes.data || []);
-      setBudgets(budgetsRes.data || []);
       setGoals(goalsRes.data || []);
-      setCustomCategories(categoriesRes.data || []);
 
       if (reportRes.data) {
         setByCardExpenses(reportRes.data.byCard || {});
-        setByCategoryExpenses(reportRes.data.byCategory || {});
       }
 
       // Calcular despesas não pagas por cartão para a fatura do mês
@@ -125,18 +111,6 @@ export function Planning() {
   useEffect(() => {
     void loadPlanningData();
   }, [loadPlanningData, refreshKey]);
-
-  // Lista combinada de categorias para o orçamento
-  const allCategoryOptions = useMemo(() => {
-    const defaultKeys = Object.keys(DEFAULT_CATEGORY_LABELS);
-    const customKeys = categoriesList.map((c) => c.name.toLowerCase());
-    return Array.from(new Set([...defaultKeys, ...customKeys])).sort();
-  }, [categoriesList]);
-
-  // Orçamentos filtrados para o mês e ano ativos
-  const currentMonthBudgets = useMemo(() => {
-    return budgets.filter((b) => b.month === selectedMonth && b.year === selectedYear);
-  }, [budgets, selectedMonth, selectedYear]);
 
   // ==========================================
   // OPERAÇÕES DE CARTÕES
@@ -204,62 +178,6 @@ export function Planning() {
         toast.error(err.response?.data?.error || "Erro ao quitar fatura.");
       } else {
         toast.error("Erro inesperado ao quitar fatura.");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  // ==========================================
-  // OPERAÇÕES DE ORÇAMENTOS
-  // ==========================================
-  function openCreateBudget() {
-    setEditingBudget(null);
-    setBudgetCategory("");
-    setBudgetAmountInput("");
-    setIsBudgetModalOpen(true);
-  }
-
-  function openEditBudget(budget: Budget) {
-    setEditingBudget(budget);
-    setBudgetCategory(budget.category);
-    setBudgetAmountInput(budget.amount ? (budget.amount * 100).toFixed(0) : "");
-    setIsBudgetModalOpen(true);
-  }
-
-  async function handleSaveBudget(e: React.FormEvent) {
-    e.preventDefault();
-    const rawAmount = budgetAmountInput.replace(/\D/g, "");
-    const numericAmount = rawAmount ? Number(rawAmount) / 100 : 0;
-
-    if (numericAmount <= 0) {
-      toast.error("Informe um valor maior que zero.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      if (editingBudget) {
-        await api.patch(`/financial/budgets/${editingBudget.id}`, {
-          amount: numericAmount,
-        });
-        toast.success("Orçamento atualizado!");
-      } else {
-        await api.post("/financial/budgets", {
-          category: budgetCategory,
-          month: selectedMonth,
-          year: selectedYear,
-          amount: numericAmount,
-        });
-        toast.success("Orçamento mensal criado!");
-      }
-      setIsBudgetModalOpen(false);
-      triggerRefresh();
-    } catch (err) {
-      if (isAxiosError(err)) {
-        toast.error(err.response?.data?.error || "Erro ao salvar orçamento.");
-      } else {
-        toast.error("Erro inesperado ao salvar orçamento.");
       }
     } finally {
       setIsSubmitting(false);
@@ -376,9 +294,6 @@ export function Planning() {
       if (itemToDelete.type === "card") {
         await api.delete(`/financial/cards/${itemToDelete.id}`);
         toast.success("Cartão excluído com sucesso!");
-      } else if (itemToDelete.type === "budget") {
-        await api.delete(`/financial/budgets/${itemToDelete.id}`);
-        toast.success("Orçamento excluído com sucesso!");
       } else if (itemToDelete.type === "goal") {
         await api.delete(`/financial/goals/${itemToDelete.id}`);
         toast.success("Meta excluída com sucesso!");
@@ -406,10 +321,10 @@ export function Planning() {
               Planejamento Financeiro
             </Badge>
             <h2 className="text-xl sm:text-2xl font-bold text-[#1b2920] tracking-tight">
-              Cartões, Orçamentos e Metas
+              Cartões e Metas
             </h2>
             <p className="text-xs sm:text-sm text-[#64756a] mt-0.5">
-              Gestão estratégica de limites, tetos por categoria e reserva de objetivos para {periodLabel}.
+              Gestão estratégica de limites e reserva de objetivos para {periodLabel}.
             </p>
           </div>
         </div>
@@ -427,19 +342,6 @@ export function Planning() {
           >
             <CreditCard className="w-4 h-4" />
             <span>Cartões e Faturas ({cards.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("budgets")}
-            className={`flex items-center gap-2 py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === "budgets"
-                ? "bg-[#236344] text-white shadow-xs"
-                : "bg-[#f4efe6] text-[#64756a] hover:bg-[#ede5d8]"
-            }`}
-          >
-            <PieChart className="w-4 h-4" />
-            <span>Orçamentos Mensais ({currentMonthBudgets.length})</span>
           </button>
 
           <button
@@ -621,115 +523,7 @@ export function Planning() {
       )}
 
       {/* ==================================================================== */}
-      {/* ABA 2: ORÇAMENTOS MENSAIS                                            */}
-      {/* ==================================================================== */}
-      {activeTab === "budgets" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-bold text-[#1b2920]">Orçamentos de {periodLabel}</h3>
-              <p className="text-xs text-[#64756a]">Defina metas máximas de gasto por categoria e acompanhe despesas em tempo real.</p>
-            </div>
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Plus className="w-4 h-4" />}
-              onClick={openCreateBudget}
-            >
-              Novo Orçamento
-            </Button>
-          </div>
-
-          {currentMonthBudgets.length === 0 ? (
-            <Card padding="lg" className="text-center py-12 space-y-3">
-              <PieChart className="w-10 h-10 text-[#64756a] mx-auto opacity-70" />
-              <p className="text-sm font-semibold text-[#1b2920]">Nenhum orçamento configurado para {periodLabel}.</p>
-              <p className="text-xs text-[#64756a] max-w-sm mx-auto">
-                Crie um teto de gastos para categorias como alimentação, lazer ou transporte para manter o orçamento equilibrado.
-              </p>
-              <div className="pt-2">
-                <Button variant="secondary" size="sm" onClick={openCreateBudget}>
-                  Criar Primeiro Orçamento do Mês
-                </Button>
-              </div>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {currentMonthBudgets.map((b) => {
-                const categoryNormalized = b.category.toLowerCase().trim();
-                const actualSpent = byCategoryExpenses[categoryNormalized] || 0;
-                const budgetAmount = Number(b.amount) || 0;
-                const percent = budgetAmount > 0 ? Math.round((actualSpent / budgetAmount) * 100) : 0;
-                const isOverBudget = actualSpent > budgetAmount;
-                const isWarning = percent >= 80 && !isOverBudget;
-                const remaining = budgetAmount - actualSpent;
-
-                const displayName =
-                  DEFAULT_CATEGORY_LABELS[categoryNormalized] ||
-                  b.category.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-
-                return (
-                  <Card key={b.id} padding="md" className="space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="text-base font-bold text-[#1b2920]">{displayName}</h4>
-                        <span className="text-xs text-[#64756a] tabular-nums font-medium">
-                          Gasto atual: {formatCurrency(actualSpent)} de {formatCurrency(budgetAmount)}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => openEditBudget(b)}
-                          className="p-1.5 text-[#64756a] hover:text-[#236344] hover:bg-[#eef7f2] rounded-lg cursor-pointer"
-                          title="Editar orçamento"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setItemToDelete({ type: "budget", id: b.id, title: displayName })}
-                          className="p-1.5 text-[#64756a] hover:text-[#b33a3a] hover:bg-[#fdf4f4] rounded-lg cursor-pointer"
-                          title="Excluir orçamento"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Barra de Progresso do Orçamento */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs font-semibold tabular-nums">
-                        <span className={isOverBudget ? "text-[#b33a3a]" : isWarning ? "text-[#b86214]" : "text-[#236344]"}>
-                          {percent}% atingido
-                        </span>
-                        <span className={isOverBudget ? "text-[#b33a3a] font-bold" : "text-[#64756a]"}>
-                          {isOverBudget
-                            ? `Estourado por ${formatCurrency(Math.abs(remaining))}`
-                            : `Resta ${formatCurrency(remaining)}`}
-                        </span>
-                      </div>
-
-                      <div className="h-2.5 w-full bg-[#ede7dc] rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            isOverBudget ? "bg-[#b33a3a]" : isWarning ? "bg-[#b86214]" : "bg-[#236344]"
-                          }`}
-                          style={{ width: `${Math.min(100, percent)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ==================================================================== */}
-      {/* ABA 3: METAS FINANCEIRAS                                             */}
+      {/* ABA: METAS FINANCEIRAS                                               */}
       {/* ==================================================================== */}
       {activeTab === "goals" && (
         <div className="space-y-6">
@@ -920,77 +714,6 @@ export function Planning() {
                 </Button>
                 <Button type="submit" variant="primary" size="sm" isLoading={isSubmitting}>
                   Salvar Cartão
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Orçamento */}
-      {isBudgetModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#152e22]/50 backdrop-blur-xs animate-in fade-in select-none">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-[#e8e1d5] space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-[#1b2920]">
-                {editingBudget ? "Editar Orçamento" : `Novo Orçamento (${periodLabel})`}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsBudgetModalOpen(false)}
-                className="p-1.5 text-[#64756a] hover:text-[#1b2920] rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveBudget} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#64756a] mb-1.5">
-                  Categoria
-                </label>
-                <select
-                  required
-                  disabled={Boolean(editingBudget)}
-                  value={budgetCategory}
-                  onChange={(e) => setBudgetCategory(e.target.value)}
-                  className="bespoke-input text-sm bg-white disabled:bg-[#f4efe6]"
-                >
-                  <option value="" disabled>Selecione a categoria...</option>
-                  {allCategoryOptions.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {DEFAULT_CATEGORY_LABELS[cat] || cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#64756a] mb-1.5">
-                  Teto Máximo para o Mês (R$)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={budgetAmountInput ? formatCurrencyInput(budgetAmountInput) : ""}
-                  onChange={(e) => setBudgetAmountInput(e.target.value)}
-                  placeholder="0,00"
-                  className="bespoke-input text-sm font-bold tabular-nums"
-                  autoFocus
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsBudgetModalOpen(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" variant="primary" size="sm" isLoading={isSubmitting}>
-                  Salvar Orçamento
                 </Button>
               </div>
             </form>
@@ -1205,7 +928,7 @@ export function Planning() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-[#1b2920]">
-                  Excluir {itemToDelete.type === "card" ? "Cartão" : itemToDelete.type === "budget" ? "Orçamento" : "Meta"}
+                  Excluir {itemToDelete.type === "card" ? "Cartão" : "Meta"}
                 </h3>
                 <p className="text-xs text-[#64756a]">Ação irreversível de remoção</p>
               </div>
