@@ -14,6 +14,7 @@ interface AuthContextValue {
   signed: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => void;
+  updateUser: (user: AuthUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -52,17 +53,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  function updateUser(updated: AuthUser) {
+    setUser(updated);
+  }
+
   const value = useMemo(
-    () => ({ user, loading, signed: Boolean(user), signIn, signOut }),
+    () => ({ user, loading, signed: Boolean(user), signIn, signOut, updateUser }),
     [user, loading],
   );
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f7fa] p-6">
+      <div className="flex min-h-screen items-center justify-center bg-[#fbf9f4] p-6">
         <div className="text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#c8d9f5] border-t-[#2454a6]" />
-          <p className="mt-4 text-sm font-medium text-[#52627a]">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#c8e2d2] border-t-[#236344]" />
+          <p className="mt-4 text-sm font-medium text-[#64756a]">
             Conectando ao servidor e validando sessão...
           </p>
         </div>
