@@ -78,6 +78,9 @@ Parâmetros opcionais:
 - `year`;
 - `search`;
 - `type`: `income` ou `expense`;
+- `sort`: `date` (padrão) ou `recent` (`created_at DESC, id DESC`);
+- `onlyFirstInstallment`: `true` para incluir apenas a primeira parcela de despesas parceladas
+  (receitas continuam incluídas);
 - `page`;
 - `pageSize`.
 

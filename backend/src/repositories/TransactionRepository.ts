@@ -67,6 +67,7 @@ export class TransactionRepository {
   async findByUserId(userId: number, options: {
     month?: number; year?: number; search?: string; category?: string; card?: string; group?: 'card' | 'category'; type?: 'income' | 'expense';
     status?: 'paid' | 'pending';
+    sort?: 'date' | 'recent'; onlyFirstInstallment?: boolean;
     page: number; pageSize: number;
   }): Promise<{ rows: Transaction[]; total: number }> {
     const filters = ['user_id = ?'];
@@ -101,13 +102,18 @@ export class TransactionRepository {
     } else if (options.status === 'pending') {
       filters.push("type = 'expense' AND (is_paid = 0 OR is_paid IS NULL)");
     }
+    if (options.onlyFirstInstallment) {
+      filters.push('(type = \'income\' OR installment_number = 1 OR installment_number IS NULL)');
+    }
     const where = filters.join(' AND ');
     const offset = (options.page - 1) * options.pageSize;
-    const orderBy = options.group === 'card'
-      ? 'CASE WHEN card IS NULL OR card = \'\' THEN 1 ELSE 0 END, card ASC, date DESC, id DESC'
-      : options.group === 'category'
-        ? 'category ASC, date DESC, id DESC'
-        : 'date DESC, id DESC';
+    const orderBy = options.sort === 'recent'
+      ? 'created_at DESC, id DESC'
+      : options.group === 'card'
+        ? 'CASE WHEN card IS NULL OR card = \'\' THEN 1 ELSE 0 END, card ASC, date DESC, id DESC'
+        : options.group === 'category'
+          ? 'category ASC, date DESC, id DESC'
+          : 'date DESC, id DESC';
     const [rows] = await db.execute<RowDataPacket[]>(
       `SELECT * FROM transactions WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
       [...values, options.pageSize, offset],

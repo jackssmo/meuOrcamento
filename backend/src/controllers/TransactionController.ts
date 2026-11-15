@@ -37,6 +37,9 @@ export class TransactionController {
             const card = typeof req.query.card === 'string' ? req.query.card.trim() : undefined;
             const group = req.query.group === 'card' || req.query.group === 'category' ? req.query.group : undefined;
             const status = req.query.status === 'paid' || req.query.status === 'pending' ? req.query.status : undefined;
+            const sort = req.query.sort === 'date' || req.query.sort === 'recent' ? req.query.sort : undefined;
+            const onlyFirstInstallment =
+                req.query.onlyFirstInstallment === 'true' || req.query.firstInstallmentOnly === 'true';
             const options = { page, pageSize } as Parameters<typeof transactionService.getTransactionsByUserId>[1];
             if (month !== undefined) options.month = month;
             if (year !== undefined) options.year = year;
@@ -46,6 +49,8 @@ export class TransactionController {
             if (card !== undefined) options.card = card;
             if (group !== undefined) options.group = group;
             if (status !== undefined) options.status = status;
+            if (sort !== undefined) options.sort = sort;
+            if (onlyFirstInstallment) options.onlyFirstInstallment = true;
             const result = await transactionService.getTransactionsByUserId(userId, options);
             return res.status(200).json({ data: result.rows, pagination: { page, pageSize, total: result.total, totalPages: Math.ceil(result.total / pageSize) } });
         }
