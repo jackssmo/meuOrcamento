@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 import { isAxiosError } from "axios";
 import { api } from "../../services/api";
 import { useFinancial } from "../../hooks/useFinancial";
-import { formatCurrencyInput } from "../../utils/formatters";
+import { formatCurrency, formatCurrencyInput, splitAmountInCents } from "../../utils/formatters";
 import type { CardItem, Category, TransactionType } from "../../types/models";
 
 function getTodayInputValue(): string {
@@ -251,7 +251,7 @@ export function GlobalTransactionModal() {
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-[#64756a] mb-1.5">
                 {type === "expense" && !editingTransaction && Number(installments) > 1
-                  ? "Valor de cada parcela (R$)"
+                  ? "Valor total da compra (R$)"
                   : "Valor (R$)"}
               </label>
               <div className="relative">
@@ -391,28 +391,77 @@ export function GlobalTransactionModal() {
           )}
 
           {/* Parcelamento de Despesa */}
-          {!editingTransaction && type === "expense" && (
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64756a] mb-1.5">
-                Número de Parcelas
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="number"
-                  min="1"
-                  max="60"
-                  value={installments}
-                  onChange={(e) => setInstallments(e.target.value)}
-                  className="bespoke-input w-28 text-sm tabular-nums"
-                />
-                <span className="text-xs text-[#64756a]">
-                  {Number(installments) > 1
-                    ? `Serão geradas ${installments} parcelas mensais de R$ ${amount || "0,00"}.`
-                    : "Lançamento à vista em parcela única."}
-                </span>
+          {!editingTransaction && type === "expense" && (() => {
+            const rawDigits = amount.replace(/\D/g, "");
+            const numericAmount = rawDigits ? Number(rawDigits) / 100 : 0;
+            const parsedInstallments = Math.min(60, Math.max(1, Math.floor(Number(installments) || 1)));
+            const isInstallment = parsedInstallments > 1;
+            const installmentCents = isInstallment && numericAmount > 0
+              ? splitAmountInCents(numericAmount, parsedInstallments)
+              : [];
+            const firstCents = installmentCents[0] ?? 0;
+            const lastCents = installmentCents[installmentCents.length - 1] ?? 0;
+            const hasRemainder = firstCents !== lastCents;
+            const higherCount = installmentCents.filter((c) => c === firstCents).length;
+            const lowerCount = parsedInstallments - higherCount;
+
+            return (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#64756a] mb-1.5">
+                    Número de Parcelas
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={installments}
+                      onChange={(e) => setInstallments(e.target.value)}
+                      className="bespoke-input w-28 text-sm tabular-nums"
+                    />
+                    <span className="text-xs text-[#64756a]">
+                      {isInstallment
+                        ? numericAmount > 0
+                          ? hasRemainder
+                            ? `${higherCount}x de ${formatCurrency(firstCents / 100)} + ${lowerCount}x de ${formatCurrency(lastCents / 100)}`
+                            : `${parsedInstallments}x mensais de ${formatCurrency(firstCents / 100)}`
+                          : "Informe o valor total da compra para ver a prévia das parcelas."
+                        : "Lançamento à vista em parcela única."}
+                    </span>
+                  </div>
+                </div>
+
+                {isInstallment && numericAmount > 0 && (
+                  <div className="p-3.5 rounded-xl border border-[#ded7cb] bg-[#fbf9f4] space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-[#1b2920]">
+                        Prévia das parcelas ({parsedInstallments}x)
+                      </span>
+                      <span className="font-semibold text-[#64756a] tabular-nums">
+                        Total: {formatCurrency(numericAmount)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                      {installmentCents.map((cents, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-white border border-[#e8e1d5] text-xs tabular-nums"
+                        >
+                          <span className="font-semibold text-[#64756a]">
+                            {index + 1}/{parsedInstallments}
+                          </span>
+                          <span className="font-bold text-[#1b2920]">
+                            {formatCurrency(cents / 100)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Ações do Rodapé */}
           <div className="pt-3 border-t border-[#ede7dc] flex items-center gap-3">

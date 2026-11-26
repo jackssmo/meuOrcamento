@@ -21,3 +21,11 @@ export const formatCurrencyInput = (value: string): string => {
     maximumFractionDigits: 2,
   }).format(numeric);
 };
+
+export const splitAmountInCents = (amount: number, parts: number): number[] => {
+  if (parts <= 0) return [];
+  const totalCents = Math.round(amount * 100);
+  const baseCents = Math.floor(totalCents / parts);
+  const remainder = totalCents % parts;
+  return Array.from({ length: parts }, (_, index) => baseCents + (index < remainder ? 1 : 0));
+};

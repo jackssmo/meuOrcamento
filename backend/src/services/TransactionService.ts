@@ -2,6 +2,7 @@ import { Transaction } from '../models/Transaction';
 import { TransactionRepository } from '../repositories/TransactionRepository';
 import { transactionSchema } from '../validators/transaction.schema';
 import { getMonthlyOccurrenceDate } from '../utils/recurrenceDate';
+import { splitAmountInCents } from '../utils/money';
 import { randomUUID } from 'node:crypto';
 
 export class TransactionService {
@@ -19,7 +20,10 @@ export class TransactionService {
         }
 
         const occurrenceCount = type === 'income' ? (is_fixed ? 12 : 1) : (installments ?? 1);
-        const installmentAmount = Math.round(amount * 100) / 100;
+        const installmentAmountsInCents =
+            type === 'expense' && occurrenceCount > 1
+                ? splitAmountInCents(amount, occurrenceCount)
+                : Array.from({ length: occurrenceCount }, () => Math.round(amount * 100));
         const firstDate = new Date(date);
         firstDate.setUTCHours(0, 0, 0, 0);
         if (Number.isNaN(firstDate.getTime())) {
@@ -38,7 +42,7 @@ export class TransactionService {
             newTransactions.push({
                 user_id: userId,
                 description: descriptionWithOccurrence,
-                amount: installmentAmount,
+                amount: (installmentAmountsInCents[occurrence] ?? 0) / 100,
                 type,
                 category,
                 date: transactionDate.toISOString().substring(0, 10),
